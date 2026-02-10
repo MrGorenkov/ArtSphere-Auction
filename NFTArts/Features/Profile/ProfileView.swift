@@ -4,6 +4,7 @@ struct ProfileView: View {
     @EnvironmentObject var auctionService: AuctionService
     @EnvironmentObject var themeManager: ThemeManager
     @EnvironmentObject var languageManager: LanguageManager
+    @EnvironmentObject var authManager: AuthManager
     @State private var showNotifications = false
 
     var body: some View {
@@ -83,6 +84,20 @@ struct ProfileView: View {
                         Spacer()
                         Text("Polygon (Testnet)")
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                // Account
+                Section {
+                    Button(role: .destructive) {
+                        authManager.logout()
+                    } label: {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .foregroundStyle(.red)
+                            Text(L10n.logout)
+                                .foregroundStyle(.red)
+                        }
                     }
                 }
             }

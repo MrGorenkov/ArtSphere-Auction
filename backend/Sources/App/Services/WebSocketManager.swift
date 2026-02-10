@@ -9,6 +9,8 @@ actor WebSocketManager {
     private var auctionSubscribers: [UUID: [WebSocket]] = [:]
     // userId -> [WebSocket]
     private var userConnections: [UUID: [WebSocket]] = [:]
+    // Global feed subscribers (receive ALL auction bid/status updates)
+    private var feedSubscribers: [WebSocket] = []
 
     private init() {}
 
@@ -25,6 +27,16 @@ actor WebSocketManager {
         if auctionSubscribers[auctionId]?.isEmpty == true {
             auctionSubscribers.removeValue(forKey: auctionId)
         }
+    }
+
+    // MARK: - Global Feed
+
+    func subscribeFeed(socket: WebSocket) {
+        feedSubscribers.append(socket)
+    }
+
+    func unsubscribeFeed(socket: WebSocket) {
+        feedSubscribers.removeAll { $0 === socket }
     }
 
     // MARK: - Подключение пользователя (уведомления)
@@ -44,49 +56,54 @@ actor WebSocketManager {
 
     // MARK: - Отправка сообщений
 
-    /// Отправить обновление ставки всем подписчикам аукциона
+    /// Отправить обновление ставки всем подписчикам аукциона + глобальной ленте
     func broadcastBid(_ message: WSBidMessage, auctionId: UUID) async {
-        guard let subscribers = auctionSubscribers[auctionId] else { return }
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
 
         guard let data = try? encoder.encode(message),
               let json = String(data: data, encoding: .utf8) else { return }
 
-        for socket in subscribers {
-            if !socket.isClosed {
+        // Send to per-auction subscribers
+        if let subscribers = auctionSubscribers[auctionId] {
+            for socket in subscribers where !socket.isClosed {
                 try? await socket.send(json)
             }
+            auctionSubscribers[auctionId]?.removeAll { $0.isClosed }
         }
 
-        // Очистить закрытые соединения
-        auctionSubscribers[auctionId]?.removeAll { $0.isClosed }
+        // Send to global feed subscribers
+        for socket in feedSubscribers where !socket.isClosed {
+            try? await socket.send(json)
+        }
+        feedSubscribers.removeAll { $0.isClosed }
     }
 
     /// Отправить обновление статуса аукциона
     func broadcastAuctionUpdate(_ message: WSAuctionUpdate, auctionId: UUID) async {
-        guard let subscribers = auctionSubscribers[auctionId] else { return }
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
 
         guard let data = try? encoder.encode(message),
               let json = String(data: data, encoding: .utf8) else { return }
 
-        for socket in subscribers {
-            if !socket.isClosed {
+        if let subscribers = auctionSubscribers[auctionId] {
+            for socket in subscribers where !socket.isClosed {
                 try? await socket.send(json)
             }
         }
+
+        // Also broadcast to global feed
+        for socket in feedSubscribers where !socket.isClosed {
+            try? await socket.send(json)
+        }
+        feedSubscribers.removeAll { $0.isClosed }
     }
 
     /// Отправить уведомление конкретному пользователю
     func sendToUser(_ userId: UUID, message: String) async {
         guard let connections = userConnections[userId] else { return }
 
-        for socket in connections {
-            if !socket.isClosed {
-                try? await socket.send(message)
-            }
+        for socket in connections where !socket.isClosed {
+            try? await socket.send(message)
         }
 
         userConnections[userId]?.removeAll { $0.isClosed }
@@ -107,5 +124,7 @@ actor WebSocketManager {
                 userConnections.removeValue(forKey: userId)
             }
         }
+
+        feedSubscribers.removeAll { $0.isClosed }
     }
 }

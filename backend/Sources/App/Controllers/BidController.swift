@@ -46,7 +46,13 @@ struct BidController: RouteCollection {
             throw Abort(.badRequest, reason: "Insufficient balance")
         }
 
-        // Place bid (DB trigger will update auction)
+        // Remember previous high bidder for outbid notification
+        let previousHighBidder = try await BidModel.query(on: req.db)
+            .filter(\.$auction.$id == auctionId)
+            .sort(\.$amount, .descending)
+            .first()
+
+        // Place bid (DB trigger will update auction's current_bid and bid_count)
         let bid = BidModel(
             auctionId: auctionId,
             userId: userId,
@@ -57,7 +63,7 @@ struct BidController: RouteCollection {
 
         let bidDTO = bid.toDTO(userName: user.displayName)
 
-        // WebSocket: broadcast new bid to all subscribers
+        // WebSocket: broadcast new bid to all auction subscribers
         let wsMessage = WSBidMessage(
             type: "new_bid",
             auctionId: auctionId.uuidString,
@@ -66,6 +72,14 @@ struct BidController: RouteCollection {
             bidCount: auction.bidCount + 1
         )
         await WebSocketManager.shared.broadcastBid(wsMessage, auctionId: auctionId)
+
+        // Notify previous high bidder they've been outbid
+        if let prevBid = previousHighBidder, prevBid.$user.id != userId {
+            let outbidMsg = """
+            {"type":"outbid","title":"Outbid!","message":"\(user.displayName) outbid you on the auction","auctionId":"\(auctionId.uuidString)"}
+            """
+            await WebSocketManager.shared.sendToUser(prevBid.$user.id, message: outbidMsg)
+        }
 
         return bidDTO
     }

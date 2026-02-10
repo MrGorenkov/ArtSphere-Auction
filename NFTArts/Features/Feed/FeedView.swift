@@ -4,6 +4,7 @@ struct FeedView: View {
     @StateObject private var viewModel = FeedViewModel()
     @EnvironmentObject var auctionService: AuctionService
     @EnvironmentObject var lang: LanguageManager
+    @State private var cardsAppeared = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +28,11 @@ struct FeedView: View {
             }
             .navigationTitle(L10n.feedTitle)
             .searchable(text: $viewModel.searchText, prompt: L10n.searchArtworks)
+            .refreshable {
+                cardsAppeared = false
+                await auctionService.loadFromAPI()
+                cardsAppeared = true
+            }
             .onAppear {
                 viewModel.bind(to: auctionService)
             }
@@ -133,9 +139,10 @@ struct FeedView: View {
 
     private var auctionGrid: some View {
         LazyVStack(spacing: 16) {
-            ForEach(viewModel.filteredAuctions) { auction in
+            ForEach(Array(viewModel.filteredAuctions.enumerated()), id: \.element.id) { index, auction in
                 NavigationLink(value: auction) {
                     AuctionCardView(auction: auction)
+                        .staggeredAppear(index: index, appeared: cardsAppeared)
                 }
                 .buttonStyle(.plain)
             }
@@ -146,6 +153,7 @@ struct FeedView: View {
         .navigationDestination(for: Auction.self) { auction in
             ArtworkDetailView(auction: auction)
         }
+        .onAppear { cardsAppeared = true }
     }
 }
 

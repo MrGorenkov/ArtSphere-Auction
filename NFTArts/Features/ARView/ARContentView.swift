@@ -248,7 +248,14 @@ struct ARViewerRepresentable: UIViewRepresentable {
             guard let firstResult = results.first else { return }
 
             // Create artwork entity
-            let artworkImage = MockDataService.generateArtworkImage(for: artwork, size: CGSize(width: 512, height: 512))
+            let artworkImage: UIImage
+            if artwork.imageSource == .uploaded,
+               let data = artwork.localImageData,
+               let img = UIImage(data: data) {
+                artworkImage = img
+            } else {
+                artworkImage = MockDataService.generateArtworkImage(for: artwork, size: CGSize(width: 512, height: 512))
+            }
 
             // Create a plane mesh
             let mesh = MeshResource.generatePlane(width: 0.4, height: 0.4)

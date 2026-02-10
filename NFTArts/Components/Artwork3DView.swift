@@ -41,6 +41,10 @@ struct Artwork3DView: UIViewRepresentable {
         let sourceImage: UIImage
         if let img = artworkImage {
             sourceImage = img
+        } else if artwork.imageSource == .uploaded,
+                  let data = artwork.localImageData,
+                  let img = UIImage(data: data) {
+            sourceImage = img
         } else {
             sourceImage = MockDataService.generateArtworkImage(for: artwork, size: CGSize(width: 512, height: 512))
         }

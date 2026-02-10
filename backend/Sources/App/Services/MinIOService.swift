@@ -36,8 +36,6 @@ struct MinIOService {
 
         let response = try await client.put(URI(string: url), headers: headers) { req in
             req.body = data
-            // MinIO path-style auth
-            req.headers.basicAuthorization = .init(username: accessKey, password: secretKey)
         }
 
         guard response.status == .ok || response.status == .created else {
@@ -60,10 +58,7 @@ struct MinIOService {
     ) async throws {
         let url = "\(endpoint)/\(bucket)/\(key)"
 
-        var headers = HTTPHeaders()
-        headers.basicAuthorization = .init(username: accessKey, password: secretKey)
-
-        let response = try await client.delete(URI(string: url), headers: headers)
+        let response = try await client.delete(URI(string: url))
 
         guard response.status == .noContent || response.status == .ok else {
             throw Abort(.internalServerError, reason: "MinIO delete failed: \(response.status)")

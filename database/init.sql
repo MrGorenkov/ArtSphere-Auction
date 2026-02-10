@@ -24,7 +24,7 @@ CREATE TABLE users (
     username        VARCHAR(50)  UNIQUE NOT NULL,          -- псевдоним
     display_name    VARCHAR(100) NOT NULL,                  -- имя + фамилия
     email           VARCHAR(255) UNIQUE,                    -- почта
-    wallet_address  VARCHAR(42)  UNIQUE NOT NULL,           -- адрес кошелька
+    wallet_address  VARCHAR(100) UNIQUE NOT NULL,           -- адрес кошелька
     card_number     VARCHAR(19),                            -- номер карты
     avatar_url      TEXT,                                   -- фото профиля (MinIO)
     bio             TEXT DEFAULT '',

@@ -10,7 +10,6 @@ struct MainTabView: View {
         case feed
         case explore
         case create
-        case arView
         case collection
         case profile
 
@@ -19,7 +18,6 @@ struct MainTabView: View {
             case .feed: return "flame.fill"
             case .explore: return "magnifyingglass"
             case .create: return "plus.circle.fill"
-            case .arView: return "arkit"
             case .collection: return "square.grid.2x2.fill"
             case .profile: return "person.fill"
             }
@@ -45,12 +43,6 @@ struct MainTabView: View {
                     Label(L10n.tabCreate, systemImage: Tab.create.iconName)
                 }
                 .tag(Tab.create)
-
-            ARContentView()
-                .tabItem {
-                    Label(L10n.tabAR, systemImage: Tab.arView.iconName)
-                }
-                .tag(Tab.arView)
 
             MyCollectionView()
                 .tabItem {

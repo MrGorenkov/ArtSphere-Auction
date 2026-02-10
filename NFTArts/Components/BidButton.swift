@@ -5,6 +5,7 @@ struct BidButton: View {
     @EnvironmentObject var auctionService: AuctionService
     @EnvironmentObject var lang: LanguageManager
     @State private var showBidSheet = false
+    @State private var isPulsing = false
 
     var body: some View {
         Button {
@@ -24,9 +25,19 @@ struct BidButton: View {
                 LinearGradient.nftPrimary
             )
             .clipShape(Capsule())
+            .shadow(
+                color: auction.isActive ? Color.nftPurple.opacity(isPulsing ? 0.5 : 0.15) : .clear,
+                radius: isPulsing ? 8 : 3
+            )
         }
         .disabled(!auction.isActive)
         .opacity(auction.isActive ? 1.0 : 0.5)
+        .onAppear {
+            guard auction.isActive else { return }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+        }
         .sheet(isPresented: $showBidSheet) {
             PlaceBidSheet(auction: auction)
         }

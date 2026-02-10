@@ -12,6 +12,8 @@ struct Auction: Identifiable, Hashable {
     let reservePrice: Double?
     var winnerId: UUID?
     var creatorId: UUID?
+    var bidStep: Double?
+    var serverBidCount: Int?
 
     var timeRemaining: TimeInterval {
         max(endTime.timeIntervalSince(Date()), 0)

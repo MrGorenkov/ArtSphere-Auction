@@ -129,7 +129,7 @@ struct RegisterRequest: Content, Validatable {
     static func validations(_ validations: inout Validations) {
         validations.add("username", as: String.self, is: .count(3...50))
         validations.add("displayName", as: String.self, is: .count(1...100))
-        validations.add("walletAddress", as: String.self, is: .count(42...42))
+        validations.add("walletAddress", as: String.self, is: .count(3...100))
         validations.add("password", as: String.self, is: .count(6...))
     }
 }

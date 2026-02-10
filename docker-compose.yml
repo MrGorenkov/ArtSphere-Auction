@@ -52,9 +52,9 @@ services:
         mc mb --ignore-existing local/3d-models;
         mc mb --ignore-existing local/avatars;
         mc mb --ignore-existing local/files;
-        mc anonymous set download local/artworks;
-        mc anonymous set download local/3d-models;
-        mc anonymous set download local/avatars;
+        mc anonymous set public local/artworks;
+        mc anonymous set public local/3d-models;
+        mc anonymous set public local/avatars;
         echo 'MinIO buckets created successfully';
       "
 
@@ -74,7 +74,7 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: nftarts_minio
       MINIO_SECRET_KEY: minio_secret_key
-      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_PUBLIC_URL: http://192.168.1.54:9000
     ports:
       - "8080:8080"
     depends_on:

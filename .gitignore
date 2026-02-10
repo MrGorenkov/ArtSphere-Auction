@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Swift Package Manager
+.build/
+Package.resolved
+backend/.build/
+backend/Package.resolved
+
+# Docker
+postgres_data/
+minio_data/
+
+# Claude Code
+.claude/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local

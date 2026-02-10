@@ -15,8 +15,11 @@ struct ArtworkImageView: View {
             } else {
                 Rectangle()
                     .fill(Color(.tertiarySystemBackground))
+                    .shimmer()
                     .overlay {
-                        ProgressView()
+                        Image(systemName: "photo")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.secondary.opacity(0.3))
                     }
                     .onAppear {
                         loadImage(size: geometry.size)
@@ -26,17 +29,40 @@ struct ArtworkImageView: View {
     }
 
     private func loadImage(size: CGSize) {
-        // Check if artwork has uploaded image data
+        // 1. Uploaded local image
         if artwork.imageSource == .uploaded, let data = artwork.localImageData {
             if let uiImage = UIImage(data: data) {
-                withAnimation(.easeIn(duration: 0.3)) {
-                    self.image = uiImage
-                }
+                withAnimation(.easeIn(duration: 0.3)) { self.image = uiImage }
                 return
             }
         }
 
-        // Procedural generation
+        // 2. URL-based image from backend
+        if artwork.imageSource == .url, let urlString = artwork.imageURL,
+           let url = URL(string: urlString) {
+            Task {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            withAnimation(.easeIn(duration: 0.3)) { self.image = uiImage }
+                        }
+                        return
+                    }
+                } catch {
+                    // Fall through to procedural generation
+                }
+                // Fallback to procedural
+                await generateProcedural(size: size)
+            }
+            return
+        }
+
+        // 3. Procedural generation (default)
+        generateProceduralSync(size: size)
+    }
+
+    private func generateProceduralSync(size: CGSize) {
         let targetSize = CGSize(
             width: max(size.width * 2, 400),
             height: max(size.height * 2, 400)
@@ -44,10 +70,21 @@ struct ArtworkImageView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let generated = MockDataService.generateArtworkImage(for: artwork, size: targetSize)
             DispatchQueue.main.async {
-                withAnimation(.easeIn(duration: 0.3)) {
-                    self.image = generated
-                }
+                withAnimation(.easeIn(duration: 0.3)) { self.image = generated }
             }
+        }
+    }
+
+    private func generateProcedural(size: CGSize) async {
+        let targetSize = CGSize(
+            width: max(size.width * 2, 400),
+            height: max(size.height * 2, 400)
+        )
+        let generated = await Task.detached {
+            MockDataService.generateArtworkImage(for: self.artwork, size: targetSize)
+        }.value
+        await MainActor.run {
+            withAnimation(.easeIn(duration: 0.3)) { self.image = generated }
         }
     }
 }

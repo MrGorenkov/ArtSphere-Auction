@@ -18,6 +18,7 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
     // Image source
     var imageSource: ImageSource
     var localImageData: Data?
+    var imageURL: String?
 
     init(
         id: UUID = UUID(),
@@ -31,7 +32,8 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         contractAddress: String? = nil,
         blockchain: BlockchainNetwork = .ethereum,
         imageSource: ImageSource = .procedural,
-        localImageData: Data? = nil
+        localImageData: Data? = nil,
+        imageURL: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -45,6 +47,7 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         self.blockchain = blockchain
         self.imageSource = imageSource
         self.localImageData = localImageData
+        self.imageURL = imageURL
     }
 
     enum ImageSource: String, Codable, Hashable {

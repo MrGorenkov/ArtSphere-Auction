@@ -215,6 +215,7 @@ enum L10n {
     static var about: String { isRu ? "О приложении" : "About" }
     static var version: String { isRu ? "Версия" : "Version" }
     static var network: String { isRu ? "Сеть" : "Network" }
+    static var logout: String { isRu ? "Выйти" : "Logout" }
 
     // MARK: - Notifications
     static var notifications: String { isRu ? "Уведомления" : "Notifications" }

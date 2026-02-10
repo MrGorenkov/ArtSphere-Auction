@@ -62,6 +62,20 @@ func routes(_ app: Application) throws {
         }
     }
 
+    // ============================================
+    // WebSocket: global auction feed (all bid + status updates)
+    // ws://host:8080/ws/auctions/feed
+    // ============================================
+    app.webSocket("ws", "auctions", "feed") { req, ws in
+        await WebSocketManager.shared.subscribeFeed(socket: ws)
+
+        ws.onClose.whenComplete { _ in
+            Task {
+                await WebSocketManager.shared.unsubscribeFeed(socket: ws)
+            }
+        }
+    }
+
     // ws://host:8080/ws/user/:userId — персональные уведомления
     app.webSocket("ws", "user", ":userId") { req, ws in
         guard let userIdString = req.parameters.get("userId"),

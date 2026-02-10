@@ -6,6 +6,7 @@ struct ArtworkDetailView: View {
     @EnvironmentObject var lang: LanguageManager
     @State private var selectedTab: DetailTab = .overview
     @State private var show3DView = false
+    @State private var showARViewer = false
     @State private var isFavorited = false
     @State private var showAddToCollection = false
     @State private var showShareSheet = false
@@ -60,9 +61,35 @@ struct ArtworkDetailView: View {
         }
         .onAppear {
             isFavorited = auctionService.isFavorited(auction.artwork.id)
+            auctionService.fetchBidsForAuction(auction.id)
         }
         .sheet(isPresented: $showAddToCollection) {
             AddToCollectionSheet(artworkId: auction.artwork.id)
+        }
+        .fullScreenCover(isPresented: $showARViewer) {
+            ARViewerRepresentable(artwork: auction.artwork)
+                .ignoresSafeArea()
+                .overlay(alignment: .topTrailing) {
+                    Button {
+                        showARViewer = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundStyle(.white)
+                            .shadow(radius: 4)
+                    }
+                    .padding(20)
+                }
+                .overlay(alignment: .bottom) {
+                    Text(L10n.tapToPlace)
+                        .font(NFTTypography.subheadline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .padding(.bottom, 40)
+                }
         }
     }
 
@@ -80,23 +107,42 @@ struct ArtworkDetailView: View {
                     .transition(.opacity)
             }
 
-            Button {
-                withAnimation(.spring(response: 0.4)) {
-                    show3DView.toggle()
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.4)) {
+                        show3DView.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: show3DView ? "photo" : "cube.fill")
+                            .font(.system(size: 14))
+                        Text(show3DView ? "2D" : "3D")
+                            .font(NFTTypography.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: show3DView ? "photo" : "cube.fill")
-                        .font(.system(size: 14))
-                    Text(show3DView ? "2D" : "3D")
-                        .font(NFTTypography.caption)
-                        .fontWeight(.semibold)
+
+                Button {
+                    showARViewer = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arkit")
+                            .font(.system(size: 14))
+                        Text("AR")
+                            .font(NFTTypography.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
             }
             .padding(16)
         }

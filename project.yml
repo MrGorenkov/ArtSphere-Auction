@@ -23,16 +23,7 @@ targets:
           - "**/.DS_Store"
     settings:
       base:
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_GENERATION_MODE: GeneratedFile
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
-        INFOPLIST_KEY_UILaunchScreen_Generation: true
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        INFOPLIST_KEY_NSCameraUsageDescription: "NFT Arts needs camera access for AR viewing of artworks"
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "NFT Arts needs photo library access to upload artwork images"
-        INFOPLIST_KEY_CFBundleDisplayName: "NFT Arts"
+        INFOPLIST_FILE: NFTArts/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         PRODUCT_BUNDLE_IDENTIFIER: com.gorenkov.NFTArts

@@ -22,7 +22,7 @@ struct User: Identifiable, Hashable {
         ownedArtworks: [UUID] = [],
         favoritedArtworks: [UUID] = [],
         collections: [NFTCollection] = [],
-        balance: Double = 10.0
+        balance: Double = 25.0
     ) {
         self.id = id
         self.username = username

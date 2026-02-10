@@ -379,17 +379,80 @@ struct CreateNFTView: View {
 
         isProcessing = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            _ = auctionService.createNFTFromImage(
-                image: image,
-                title: title,
-                description: description,
-                category: category,
-                startingPrice: price,
-                durationHours: durationHours
-            )
-            isProcessing = false
-            showSuccess = true
+        if auctionService.isOnline {
+            Task {
+                do {
+                    let network = NetworkService.shared
+                    // 1. Create artwork on backend
+                    let artworkReq = APICreateArtworkRequest(
+                        title: title,
+                        description: description.isEmpty ? nil : description,
+                        styleId: nil,
+                        price: price,
+                        blockchain: blockchain.rawValue
+                    )
+                    let apiArtwork = try await network.createArtwork(request: artworkReq)
+
+                    // 2. Upload image to MinIO
+                    if let imageData = image.jpegData(compressionQuality: 0.8) {
+                        _ = try await network.uploadArtworkImage(
+                            artworkId: apiArtwork.id,
+                            imageData: imageData
+                        )
+                    }
+
+                    // 3. Create auction on backend
+                    let auctionReq = APICreateAuctionRequest(
+                        artworkId: apiArtwork.id,
+                        startingPrice: price,
+                        reservePrice: nil,
+                        bidStep: max(price * 0.05, 0.01),
+                        durationHours: Int(durationHours)
+                    )
+                    _ = try await network.createAuction(request: auctionReq)
+
+                    // 4. Also add locally so it appears immediately
+                    await MainActor.run {
+                        _ = auctionService.createNFTFromImage(
+                            image: image,
+                            title: title,
+                            description: description,
+                            category: category,
+                            startingPrice: price,
+                            durationHours: durationHours
+                        )
+                        isProcessing = false
+                        showSuccess = true
+                    }
+                } catch {
+                    // Fallback to local creation on API error
+                    await MainActor.run {
+                        _ = auctionService.createNFTFromImage(
+                            image: image,
+                            title: title,
+                            description: description,
+                            category: category,
+                            startingPrice: price,
+                            durationHours: durationHours
+                        )
+                        isProcessing = false
+                        showSuccess = true
+                    }
+                }
+            }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                _ = auctionService.createNFTFromImage(
+                    image: image,
+                    title: title,
+                    description: description,
+                    category: category,
+                    startingPrice: price,
+                    durationHours: durationHours
+                )
+                isProcessing = false
+                showSuccess = true
+            }
         }
     }
 }

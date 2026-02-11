@@ -404,6 +404,10 @@ final class AuctionService: ObservableObject {
     }
 
     func uploadAvatar(imageData: Data) {
+        // Always save locally so avatar persists across launches
+        Self.saveLocalAvatar(imageData)
+        currentUser.avatarUrl = Self.localAvatarURL?.absoluteString
+
         guard isOnline else { return }
         Task {
             do {
@@ -421,6 +425,27 @@ final class AuctionService: ObservableObject {
                 print("Failed to upload avatar: \(error)")
             }
         }
+    }
+
+    // MARK: - Local Avatar Persistence
+
+    private static var localAvatarPath: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("user_avatar.jpg")
+    }
+
+    static var localAvatarURL: URL? {
+        FileManager.default.fileExists(atPath: localAvatarPath.path) ? localAvatarPath : nil
+    }
+
+    static func saveLocalAvatar(_ data: Data) {
+        try? data.write(to: localAvatarPath)
+    }
+
+    static func loadLocalAvatarImage() -> UIImage? {
+        guard let url = localAvatarURL,
+              let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
     }
 
     func refreshProfile() async {
@@ -496,12 +521,24 @@ final class AuctionService: ObservableObject {
                     await MainActor.run {
                         self.addNotification(title: "Bid Placed", message: "You bid \(String(format: "%.2f ETH", apiBid.amount)) on \"\(artworkTitle)\"", type: .bidPlaced)
                     }
+                } catch let apiError as APIError {
+                    await MainActor.run {
+                        switch apiError {
+                        case .networkError:
+                            // Network issue — queue for retry on reconnect
+                            self.bidQueue.queueBid(auctionId: auctionId, amount: amount)
+                            self.analytics.track(.bidFailed, parameters: ["error": apiError.localizedDescription, "queued": "true"])
+                            self.addNotification(title: L10n.bidQueued, message: L10n.pendingSync, type: .bidPlaced)
+                        default:
+                            // Server error (400, 404 etc.) — show actual error
+                            self.analytics.track(.bidFailed, parameters: ["error": apiError.localizedDescription])
+                            self.addNotification(title: L10n.bidFailed, message: apiError.errorDescription ?? "Unknown error", type: .bidPlaced)
+                        }
+                    }
                 } catch {
-                    // Queue failed bid for retry on reconnect
                     await MainActor.run {
                         self.bidQueue.queueBid(auctionId: auctionId, amount: amount)
-                        self.analytics.track(.bidFailed, parameters: ["error": error.localizedDescription, "queued": "true"])
-                        self.addNotification(title: "Bid Queued", message: "Will retry when connection restores", type: .bidPlaced)
+                        self.addNotification(title: L10n.bidQueued, message: L10n.pendingSync, type: .bidPlaced)
                     }
                 }
             }

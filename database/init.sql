@@ -300,6 +300,18 @@ CREATE TABLE auth_tokens (
 
 CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id);
 
+-- Push notification device tokens
+CREATE TABLE device_tokens (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL,
+    platform   VARCHAR(10) NOT NULL DEFAULT 'ios',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (user_id, platform)
+);
+
+CREATE INDEX idx_device_tokens_user ON device_tokens(user_id);
+
 -- ============================================
 -- ФУНКЦИИ И ТРИГГЕРЫ
 -- ============================================

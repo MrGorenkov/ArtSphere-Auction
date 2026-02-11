@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct NFTArtsApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     @StateObject private var themeManager = ThemeManager()
     @StateObject private var auctionService = AuctionService.shared
     @StateObject private var languageManager = LanguageManager.shared
@@ -18,6 +20,10 @@ struct NFTArtsApp: App {
                         ))
                         .task {
                             await auctionService.loadFromAPI()
+                        }
+                        .onAppear {
+                            // Request push notification permission after login
+                            PushNotificationService.shared.requestPermission()
                         }
                 } else {
                     LoginView()

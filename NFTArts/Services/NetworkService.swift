@@ -528,9 +528,9 @@ extension NetworkService {
         try await request(endpoint: "collections", method: .post, body: body)
     }
 
-    func addToCollection(collectionId: String, artworkId: String) async throws -> APICollection {
+    func addToCollection(collectionId: String, artworkId: String) async throws {
         struct Body: Codable { let artworkId: String }
-        return try await request(
+        try await requestVoid(
             endpoint: "collections/\(collectionId)/artworks",
             method: .post,
             body: Body(artworkId: artworkId)

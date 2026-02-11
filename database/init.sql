@@ -170,6 +170,7 @@ CREATE TABLE bids (
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     amount     DOUBLE PRECISION NOT NULL,                      -- стоимость ставки
     created_at TIMESTAMPTZ DEFAULT NOW(),                     -- дата+время ставки
+    synced     BOOLEAN NOT NULL DEFAULT false,                -- true = поступила через /sync/bids
 
     CONSTRAINT positive_amount CHECK (amount > 0)
 );

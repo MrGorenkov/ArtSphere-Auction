@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		02DABA61888CFB34A7348FEE /* View+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02F073A2E0C2EB6AB9151F5 /* View+Extensions.swift */; };
+		047C7FBF1DEED328EE8A8328 /* BidQueueService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0948361C0CEC6368439DC2 /* BidQueueService.swift */; };
 		0E3073DB0B16758E4A15C7B3 /* CountdownTimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE89E2B27935438A8B7BE17 /* CountdownTimerView.swift */; };
 		1364F01228B3E6524D8FA016 /* ArtworkImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51A2E05C48B309F0EF06CF9 /* ArtworkImageView.swift */; };
 		13AD5A4E8CE16B25BD6F40B9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6C2FC4C6690900B82817EE01 /* Assets.xcassets */; };
@@ -76,6 +77,7 @@
 		89966BF9F480458FBC83D40D /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
 		94E582C05966DD22B080A491 /* FullScreen3DViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreen3DViewer.swift; sourceTree = "<group>"; };
 		98EBC59498F8DDFAC1F29383 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		AC0948361C0CEC6368439DC2 /* BidQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BidQueueService.swift; sourceTree = "<group>"; };
 		AE3BE67BA53E04B2EEFEECCB /* WebSocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketService.swift; sourceTree = "<group>"; };
 		BF2FA1C85BDEE66905FFA346 /* FeedViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewModel.swift; sourceTree = "<group>"; };
 		CD4437EDE37CE584FD9B18F3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -258,6 +260,7 @@
 				3E14F5739A0492E0672B09C1 /* AnalyticsService.swift */,
 				0599F34AFC874F283BF3473E /* AuctionService.swift */,
 				98EBC59498F8DDFAC1F29383 /* AuthManager.swift */,
+				AC0948361C0CEC6368439DC2 /* BidQueueService.swift */,
 				11B37E1886CB338A423F7CF9 /* MockDataService.swift */,
 				89966BF9F480458FBC83D40D /* NetworkService.swift */,
 				2F7FC4A537EDFFCD8FFC9EC1 /* PushNotificationService.swift */,
@@ -388,6 +391,7 @@
 				E8881FF5D294D2224F9D864A /* AuctionService.swift in Sources */,
 				9A6790EA16154473A88D29D8 /* AuthManager.swift in Sources */,
 				80F1EFDDF289FDA1F5367CF8 /* BidButton.swift in Sources */,
+				047C7FBF1DEED328EE8A8328 /* BidQueueService.swift in Sources */,
 				8BA2BD43AEDE6B555EA26FFC /* Collection.swift in Sources */,
 				47A340A41A385D67F978B340 /* Color+Extensions.swift in Sources */,
 				0E3073DB0B16758E4A15C7B3 /* CountdownTimerView.swift in Sources */,

@@ -49,6 +49,7 @@ struct BidButton: View {
 struct PlaceBidSheet: View {
     let auction: Auction
     @EnvironmentObject var auctionService: AuctionService
+    @ObservedObject private var bidQueue = BidQueueService.shared
     @Environment(\.dismiss) private var dismiss
     @State private var bidAmount = ""
     @State private var showConfirmation = false
@@ -99,6 +100,31 @@ struct PlaceBidSheet: View {
                 .padding()
                 .background(Color(.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                // Pending bids banner
+                if !bidQueue.pendingBids.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .foregroundStyle(.orange)
+                        Text(L10n.pendingBidsCount(bidQueue.pendingBids.count))
+                            .font(NFTTypography.caption)
+                        Spacer()
+                        if bidQueue.isSyncing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Button(action: { bidQueue.syncQueue() }) {
+                                Text("Sync")
+                                    .font(NFTTypography.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.nftPurple)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
 
                 // Bid input
                 VStack(alignment: .leading, spacing: 8) {

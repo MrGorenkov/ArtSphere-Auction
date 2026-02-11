@@ -20,6 +20,7 @@ final class AuctionService: ObservableObject {
     private let network = NetworkService.shared
     private let webSocket = WebSocketService.shared
     private let analytics = AnalyticsService.shared
+    private let bidQueue = BidQueueService.shared
 
     private var artworkCache: [String: NFTArtwork] = [:]
 
@@ -111,6 +112,11 @@ final class AuctionService: ObservableObject {
 
             // Subscribe to global auction feed via WebSocket
             webSocket.subscribeToAuctionFeed()
+
+            // Sync any queued offline bids
+            if bidQueue.hasPendingBids {
+                bidQueue.syncQueue()
+            }
 
         } catch {
             print("API load failed, using local data: \(error)")
@@ -483,16 +489,19 @@ final class AuctionService: ObservableObject {
 
         if isOnline {
             // When online, send to API — the WS feed will broadcast the update back
+            let artworkTitle = auction.artwork.title
             Task {
                 do {
                     let apiBid = try await network.placeBid(request: APIPlaceBidRequest(auctionId: auctionId.uuidString, amount: amount))
                     await MainActor.run {
-                        self.addNotification(title: "Bid Placed", message: "You bid \(String(format: "%.2f ETH", apiBid.amount)) on \"\(auction.artwork.title)\"", type: .bidPlaced)
+                        self.addNotification(title: "Bid Placed", message: "You bid \(String(format: "%.2f ETH", apiBid.amount)) on \"\(artworkTitle)\"", type: .bidPlaced)
                     }
                 } catch {
+                    // Queue failed bid for retry on reconnect
                     await MainActor.run {
-                        self.analytics.track(.bidFailed, parameters: ["error": error.localizedDescription])
-                        self.addNotification(title: "Bid Failed", message: error.localizedDescription, type: .bidPlaced)
+                        self.bidQueue.queueBid(auctionId: auctionId, amount: amount)
+                        self.analytics.track(.bidFailed, parameters: ["error": error.localizedDescription, "queued": "true"])
+                        self.addNotification(title: "Bid Queued", message: "Will retry when connection restores", type: .bidPlaced)
                     }
                 }
             }
@@ -502,11 +511,12 @@ final class AuctionService: ObservableObject {
             auctions[index].currentBid = amount
             return .success(bid)
         } else {
-            // Offline: local-only bid
+            // Offline: local bid + queue for sync when back online
             let bid = Bid(id: UUID(), userId: currentUser.id, userName: currentUser.displayName, amount: amount, timestamp: Date())
             auctions[index].bids.append(bid)
             auctions[index].currentBid = amount
-            addNotification(title: "Bid Placed", message: "You bid \(bid.formattedAmount) on \"\(auction.artwork.title)\"", type: .bidPlaced)
+            bidQueue.queueBid(auctionId: auctionId, amount: amount)
+            addNotification(title: "Bid Queued", message: "You bid \(bid.formattedAmount) — will sync when online", type: .bidPlaced)
             return .success(bid)
         }
     }

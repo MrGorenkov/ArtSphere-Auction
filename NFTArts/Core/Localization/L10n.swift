@@ -87,6 +87,11 @@ enum L10n {
     static var placeBid: String { isRu ? "Сделать ставку" : "Place Bid" }
     static var bidPlaced: String { isRu ? "Ставка сделана!" : "Bid Placed!" }
     static var bidFailed: String { isRu ? "Ошибка ставки" : "Bid Failed" }
+    static var bidQueued: String { isRu ? "Ставка в очереди" : "Bid Queued" }
+    static var pendingSync: String { isRu ? "Ожидает отправки" : "Pending sync" }
+    static func pendingBidsCount(_ count: Int) -> String {
+        isRu ? "\(count) ставок в очереди" : "\(count) bids pending"
+    }
     static var yourBid: String { isRu ? "Ваша ставка" : "Your Bid" }
     static var minimumBid: String { isRu ? "Минимальная ставка" : "Minimum bid" }
     static var noBidsYet: String { isRu ? "Ставок пока нет" : "No bids yet" }

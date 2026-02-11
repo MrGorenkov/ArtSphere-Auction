@@ -5,6 +5,9 @@ struct BidController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let bids = routes.grouped("bids")
         bids.post(use: placeBid)
+
+        let sync = routes.grouped("sync")
+        sync.post("bids", use: syncBids)
     }
 
     // POST /api/v1/bids
@@ -83,4 +86,75 @@ struct BidController: RouteCollection {
 
         return bidDTO
     }
+
+    // POST /api/v1/sync/bids — batch-sync queued offline bids
+    func syncBids(req: Request) async throws -> SyncBidResponse {
+        let userId = try req.auth.require(UUID.self)
+        let inputs = try req.content.decode([SyncBidInput].self)
+
+        guard let user = try await UserModel.find(userId, on: req.db) else {
+            throw Abort(.notFound, reason: "User not found")
+        }
+
+        var synced: [String] = []
+        var failed: [String] = []
+
+        for input in inputs {
+            guard let auctionId = UUID(uuidString: input.auctionId) else {
+                failed.append(input.id)
+                continue
+            }
+
+            guard let auction = try await AuctionModel.find(auctionId, on: req.db) else {
+                failed.append(input.id)
+                continue
+            }
+
+            // Skip ended/sold auctions and insufficient amounts
+            let minimumBid = max(auction.currentBid + auction.bidStep, auction.startingPrice)
+            guard auction.status == "active",
+                  auction.endTime > Date(),
+                  input.amount >= minimumBid,
+                  user.balance >= input.amount else {
+                failed.append(input.id)
+                continue
+            }
+
+            let bid = BidModel(
+                auctionId: auctionId,
+                userId: userId,
+                amount: input.amount,
+                synced: true
+            )
+            try await bid.save(on: req.db)
+            synced.append(input.id)
+
+            // WebSocket broadcast
+            let bidDTO = bid.toDTO(userName: user.displayName)
+            let wsMessage = WSBidMessage(
+                type: "new_bid",
+                auctionId: auctionId.uuidString,
+                bid: bidDTO,
+                currentBid: input.amount,
+                bidCount: auction.bidCount + 1
+            )
+            await WebSocketManager.shared.broadcastBid(wsMessage, auctionId: auctionId)
+        }
+
+        return SyncBidResponse(synced: synced, failed: failed)
+    }
+}
+
+// MARK: - Sync DTOs
+
+struct SyncBidInput: Content {
+    let id: String
+    let auctionId: String
+    let amount: Double
+    let timestamp: String
+}
+
+struct SyncBidResponse: Content {
+    let synced: [String]
+    let failed: [String]
 }

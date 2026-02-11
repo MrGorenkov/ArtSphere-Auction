@@ -6,6 +6,7 @@ struct User: Identifiable, Hashable {
     var displayName: String
     var walletAddress: String
     var avatarName: String?
+    var avatarUrl: String?
     var bio: String
     var ownedArtworks: [UUID]
     var favoritedArtworks: [UUID]
@@ -18,6 +19,7 @@ struct User: Identifiable, Hashable {
         displayName: String,
         walletAddress: String,
         avatarName: String? = nil,
+        avatarUrl: String? = nil,
         bio: String = "",
         ownedArtworks: [UUID] = [],
         favoritedArtworks: [UUID] = [],
@@ -29,6 +31,7 @@ struct User: Identifiable, Hashable {
         self.displayName = displayName
         self.walletAddress = walletAddress
         self.avatarName = avatarName
+        self.avatarUrl = avatarUrl
         self.bio = bio
         self.ownedArtworks = ownedArtworks
         self.favoritedArtworks = favoritedArtworks

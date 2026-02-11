@@ -33,6 +33,9 @@ struct MyCollectionView: View {
                 .padding(.vertical)
             }
             .navigationTitle(L10n.myCollection)
+            .refreshable {
+                await auctionService.refreshProfile()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {

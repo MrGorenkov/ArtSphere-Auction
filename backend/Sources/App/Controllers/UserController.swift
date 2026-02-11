@@ -10,6 +10,7 @@ struct UserController: RouteCollection {
         users.get("me", "notifications", use: notifications)
         users.put("me", use: updateProfile)
         users.on(.POST, "me", "avatar", body: .collect(maxSize: "5mb"), use: uploadAvatar)
+        users.post("me", "device-token", use: registerDeviceToken)
     }
 
     // GET /api/v1/users/me
@@ -130,6 +131,23 @@ struct UserController: RouteCollection {
             )
         }
     }
+    // POST /api/v1/users/me/device-token
+    func registerDeviceToken(req: Request) async throws -> HTTPStatus {
+        let userId = try req.auth.require(UUID.self)
+        let body = try req.content.decode(DeviceTokenRequest.self)
+
+        let db = req.db as! SQLDatabase
+        // Upsert device token (replace if same user+platform exists)
+        try await db.raw("""
+            INSERT INTO device_tokens (id, user_id, token, platform, created_at)
+            VALUES (\(bind: UUID()), \(bind: userId), \(bind: body.token), \(bind: body.platform), NOW())
+            ON CONFLICT (user_id, platform)
+            DO UPDATE SET token = \(bind: body.token), created_at = NOW()
+            """)
+            .run()
+
+        return .ok
+    }
 }
 
 struct UserStatsDTO: Content {
@@ -153,4 +171,9 @@ struct UpdateProfileRequest: Content {
     let bio: String?
     let email: String?
     let cardNumber: String?
+}
+
+struct DeviceTokenRequest: Content {
+    let token: String
+    let platform: String
 }

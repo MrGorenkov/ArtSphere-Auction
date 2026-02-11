@@ -19,6 +19,7 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
     var imageSource: ImageSource
     var localImageData: Data?
     var imageURL: String?
+    var modelUrl: String?
 
     init(
         id: UUID = UUID(),
@@ -33,7 +34,8 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         blockchain: BlockchainNetwork = .ethereum,
         imageSource: ImageSource = .procedural,
         localImageData: Data? = nil,
-        imageURL: String? = nil
+        imageURL: String? = nil,
+        modelUrl: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -48,6 +50,7 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         self.imageSource = imageSource
         self.localImageData = localImageData
         self.imageURL = imageURL
+        self.modelUrl = modelUrl
     }
 
     enum ImageSource: String, Codable, Hashable {

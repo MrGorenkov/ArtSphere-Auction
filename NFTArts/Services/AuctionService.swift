@@ -19,6 +19,7 @@ final class AuctionService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let network = NetworkService.shared
     private let webSocket = WebSocketService.shared
+    private let analytics = AnalyticsService.shared
 
     private var artworkCache: [String: NFTArtwork] = [:]
 
@@ -153,7 +154,8 @@ final class AuctionService: ObservableObject {
             createdAt: ISO8601DateFormatter().date(from: api.createdAt) ?? Date(),
             blockchain: blockchain,
             imageSource: imageSource,
-            imageURL: api.imageUrl
+            imageURL: api.imageUrl,
+            modelUrl: api.filePath
         )
     }
 
@@ -200,6 +202,7 @@ final class AuctionService: ObservableObject {
             username: api.username,
             displayName: api.displayName,
             walletAddress: api.walletAddress,
+            avatarUrl: api.avatarUrl,
             bio: api.bio ?? "",
             balance: api.balance
         )
@@ -347,6 +350,96 @@ final class AuctionService: ObservableObject {
         }
     }
 
+    // MARK: - Profile & Stats
+
+    @Published var userStats: APIUserStats?
+    @Published var apiNotifications: [APINotification] = []
+
+    func fetchUserStats() {
+        guard isOnline else { return }
+        Task {
+            do {
+                let stats = try await network.fetchStats()
+                await MainActor.run { self.userStats = stats }
+            } catch {
+                print("Failed to fetch stats: \(error)")
+            }
+        }
+    }
+
+    func fetchAPINotifications() {
+        guard isOnline else { return }
+        Task {
+            do {
+                let notes = try await network.fetchNotifications()
+                await MainActor.run { self.apiNotifications = notes }
+            } catch {
+                print("Failed to fetch notifications: \(error)")
+            }
+        }
+    }
+
+    func updateProfile(displayName: String, bio: String) {
+        currentUser.displayName = displayName
+        currentUser.bio = bio
+        guard isOnline else { return }
+        Task {
+            do {
+                let updated = try await network.updateProfile(displayName: displayName, bio: bio, avatarUrl: nil)
+                await MainActor.run {
+                    self.currentUser.displayName = updated.displayName
+                    self.currentUser.bio = updated.bio ?? ""
+                    self.currentUser.avatarUrl = updated.avatarUrl
+                }
+            } catch {
+                print("Failed to update profile: \(error)")
+            }
+        }
+    }
+
+    func uploadAvatar(imageData: Data) {
+        guard isOnline else { return }
+        Task {
+            do {
+                let updated: APIUser = try await network.upload(
+                    endpoint: "users/me/avatar",
+                    imageData: imageData,
+                    imageFieldName: "avatar",
+                    fileName: "avatar.jpg",
+                    mimeType: "image/jpeg"
+                )
+                await MainActor.run {
+                    self.currentUser.avatarUrl = updated.avatarUrl
+                }
+            } catch {
+                print("Failed to upload avatar: \(error)")
+            }
+        }
+    }
+
+    func refreshProfile() async {
+        guard isOnline else { return }
+        do {
+            async let profileTask = network.fetchProfile()
+            async let collectionsTask = network.fetchCollections()
+            async let statsTask = network.fetchStats()
+
+            let apiUser = try await profileTask
+            let apiCollections = try await collectionsTask
+            let stats = try await statsTask
+
+            var user = Self.mapUser(apiUser)
+            user.collections = apiCollections.map { Self.mapCollection($0) }
+
+            await MainActor.run {
+                self.currentUser = user
+                self.userStats = stats
+            }
+        } catch {
+            print("Failed to refresh profile: \(error)")
+        }
+    }
+
     // MARK: - Bot Bidding (offline only)
 
     private let botBidders: [(String, UUID)] = [
@@ -386,6 +479,8 @@ final class AuctionService: ObservableObject {
         guard amount >= auction.minimumNextBid else { return .failure("Bid must be at least \(String(format: "%.2f", auction.minimumNextBid)) ETH") }
         guard amount <= currentUser.balance else { return .failure("Insufficient balance") }
 
+        analytics.trackBid(auctionId: auctionId.uuidString, amount: amount, artworkTitle: auction.artwork.title)
+
         if isOnline {
             // When online, send to API — the WS feed will broadcast the update back
             Task {
@@ -396,6 +491,7 @@ final class AuctionService: ObservableObject {
                     }
                 } catch {
                     await MainActor.run {
+                        self.analytics.track(.bidFailed, parameters: ["error": error.localizedDescription])
                         self.addNotification(title: "Bid Failed", message: error.localizedDescription, type: .bidPlaced)
                     }
                 }
@@ -443,6 +539,15 @@ final class AuctionService: ObservableObject {
             currentUser.collections[idx].name = name
             currentUser.collections[idx].description = description
             currentUser.collections[idx].updatedAt = Date()
+            if isOnline {
+                Task {
+                    try? await network.request(
+                        endpoint: "collections/\(id.uuidString)",
+                        method: .put,
+                        body: ["name": name, "description": description]
+                    ) as APICollection
+                }
+            }
         }
     }
 
@@ -472,6 +577,7 @@ final class AuctionService: ObservableObject {
     // MARK: - Create NFT
 
     func createNFTFromImage(image: UIImage, title: String, description: String, category: NFTArtwork.ArtworkCategory, startingPrice: Double, durationHours: Double) -> Auction {
+        analytics.trackNFTCreated(title: title, category: category.rawValue, startingPrice: startingPrice)
         let imageData = image.jpegData(compressionQuality: 0.8)
         let artwork = NFTArtwork(
             title: title, artistName: currentUser.displayName, description: description,

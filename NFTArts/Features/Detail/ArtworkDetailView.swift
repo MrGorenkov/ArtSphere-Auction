@@ -7,6 +7,7 @@ struct ArtworkDetailView: View {
     @State private var selectedTab: DetailTab = .overview
     @State private var show3DView = false
     @State private var showARViewer = false
+    @State private var showFullscreen3D = false
     @State private var isFavorited = false
     @State private var showAddToCollection = false
     @State private var showShareSheet = false
@@ -65,6 +66,9 @@ struct ArtworkDetailView: View {
         }
         .sheet(isPresented: $showAddToCollection) {
             AddToCollectionSheet(artworkId: auction.artwork.id)
+        }
+        .fullScreenCover(isPresented: $showFullscreen3D) {
+            FullScreen3DViewer(artwork: auction.artwork)
         }
         .fullScreenCover(isPresented: $showARViewer) {
             ARViewerRepresentable(artwork: auction.artwork)
@@ -128,6 +132,25 @@ struct ArtworkDetailView: View {
                 }
 
                 Button {
+                    AnalyticsService.shared.track3D(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
+                    showFullscreen3D = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "rotate.3d")
+                            .font(.system(size: 14))
+                        Text(L10n.view3DModel)
+                            .font(NFTTypography.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                }
+
+                Button {
+                    AnalyticsService.shared.trackAR(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
                     showARViewer = true
                 } label: {
                     HStack(spacing: 6) {

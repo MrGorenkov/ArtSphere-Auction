@@ -14,6 +14,7 @@ final class AuthManager: ObservableObject {
     @Published var error: String?
 
     private let network = NetworkService.shared
+    private let analytics = AnalyticsService.shared
 
     private init() {
         // If a persisted token exists, mark as authenticated and fetch the profile.
@@ -44,6 +45,8 @@ final class AuthManager: ObservableObject {
                 currentUser = response.user
                 isAuthenticated = true
                 isLoading = false
+                analytics.setUserId(response.user.id)
+                analytics.track(.login, parameters: ["wallet": walletAddress])
             }
         } catch {
             await MainActor.run {
@@ -88,6 +91,8 @@ final class AuthManager: ObservableObject {
                 currentUser = response.user
                 isAuthenticated = true
                 isLoading = false
+                analytics.setUserId(response.user.id)
+                analytics.track(.register, parameters: ["username": username])
             }
         } catch {
             await MainActor.run {
@@ -145,6 +150,7 @@ final class AuthManager: ObservableObject {
     // MARK: - Logout
 
     func logout() {
+        analytics.track(.logout)
         network.setAuthToken(nil)
         isAuthenticated = false
         currentUser = nil

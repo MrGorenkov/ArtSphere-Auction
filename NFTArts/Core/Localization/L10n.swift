@@ -199,6 +199,8 @@ enum L10n {
     static var launchAR: String { isRu ? "Запустить AR" : "Launch AR" }
     static var changeArtwork: String { isRu ? "Изменить произведение" : "Change Artwork" }
     static var tapToPlace: String { isRu ? "Нажмите на поверхность для размещения" : "Tap on a surface to place artwork" }
+    static var rotateToInspect: String { isRu ? "Вращайте для осмотра" : "Rotate to inspect" }
+    static var view3DModel: String { isRu ? "3D Модель" : "3D Model" }
 
     // MARK: - Profile
     static var profileTitle: String { isRu ? "Профиль" : "Profile" }
@@ -237,6 +239,14 @@ enum L10n {
         case .sold: return sold
         }
     }
+
+    // MARK: - Profile Edit
+    static var editProfile: String { isRu ? "Редактировать профиль" : "Edit Profile" }
+    static var displayName: String { isRu ? "Отображаемое имя" : "Display Name" }
+    static var bio: String { isRu ? "О себе" : "Bio" }
+    static var changeAvatar: String { isRu ? "Изменить аватар" : "Change Avatar" }
+    static var profileUpdated: String { isRu ? "Профиль обновлён" : "Profile Updated" }
+    static var account: String { isRu ? "Аккаунт" : "Account" }
 
     // MARK: - Theme names
     static var themeSystem: String { isRu ? "Системная" : "System" }

@@ -220,6 +220,13 @@ struct AvatarView: View {
     }
 
     private func loadAvatar() {
+        // Try local avatar first (saved from device camera/gallery)
+        if let localImage = AuctionService.loadLocalAvatarImage() {
+            withAnimation(.easeIn(duration: 0.3)) { self.image = localImage }
+            return
+        }
+
+        // Fall back to URL (from server/MinIO)
         guard let urlString = avatarUrl, let url = URL(string: urlString) else { return }
         Task {
             do {

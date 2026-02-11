@@ -113,14 +113,20 @@ struct ArtworkDetailView: View {
 
             HStack(spacing: 8) {
                 Button {
-                    withAnimation(.spring(response: 0.4)) {
-                        show3DView.toggle()
+                    if show3DView {
+                        // Already in 3D — open fullscreen viewer
+                        AnalyticsService.shared.track3D(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
+                        showFullscreen3D = true
+                    } else {
+                        withAnimation(.spring(response: 0.4)) {
+                            show3DView = true
+                        }
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: show3DView ? "photo" : "cube.fill")
+                        Image(systemName: show3DView ? "rotate.3d" : "cube.fill")
                             .font(.system(size: 14))
-                        Text(show3DView ? "2D" : "3D")
+                        Text(show3DView ? L10n.view3DModel : "3D")
                             .font(NFTTypography.caption)
                             .fontWeight(.semibold)
                     }
@@ -131,22 +137,25 @@ struct ArtworkDetailView: View {
                     .clipShape(Capsule())
                 }
 
-                Button {
-                    AnalyticsService.shared.track3D(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
-                    showFullscreen3D = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "rotate.3d")
-                            .font(.system(size: 14))
-                        Text(L10n.view3DModel)
-                            .font(NFTTypography.caption)
-                            .fontWeight(.semibold)
+                if show3DView {
+                    Button {
+                        withAnimation(.spring(response: 0.4)) {
+                            show3DView = false
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 14))
+                            Text("2D")
+                                .font(NFTTypography.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
                 }
 
                 Button {

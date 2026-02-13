@@ -31,6 +31,11 @@ final class BidQueueService: ObservableObject {
     private let monitorQueue = DispatchQueue(label: "com.nftarts.bidqueue.monitor")
     private var wasDisconnected = false
 
+    // Exponential backoff
+    private var retryAttempt = 0
+    private static let maxRetries = 5
+    private static let baseDelay: TimeInterval = 1.0
+
     private static let storageKey = "com.nftarts.queuedBids"
 
     private init() {
@@ -86,6 +91,7 @@ final class BidQueueService: ObservableObject {
             if path.status == .satisfied {
                 if self.wasDisconnected && self.hasPendingBids {
                     DispatchQueue.main.async {
+                        self.retryAttempt = 0
                         self.syncQueue()
                     }
                 }
@@ -97,7 +103,7 @@ final class BidQueueService: ObservableObject {
         monitor.start(queue: monitorQueue)
     }
 
-    // MARK: - Sync
+    // MARK: - Sync with Exponential Backoff
 
     func syncQueue() {
         guard !pendingBids.isEmpty, !isSyncing else { return }
@@ -137,10 +143,10 @@ final class BidQueueService: ObservableObject {
                 let processedIds = syncedIds.union(failedIds)
 
                 await MainActor.run {
-                    // Remove synced + permanently failed bids from queue
                     self.pendingBids.removeAll { processedIds.contains($0.id.uuidString) }
                     self.saveQueue()
                     self.isSyncing = false
+                    self.retryAttempt = 0  // Reset on success
                 }
 
                 if !syncedIds.isEmpty {
@@ -150,9 +156,26 @@ final class BidQueueService: ObservableObject {
                     print("[BidQueue] \(failedIds.count) bids failed validation (removed)")
                 }
             } catch {
-                print("[BidQueue] Sync failed: \(error)")
+                print("[BidQueue] Sync failed (attempt \(retryAttempt + 1)): \(error)")
                 await MainActor.run { self.isSyncing = false }
+                scheduleRetry()
             }
+        }
+    }
+
+    private func scheduleRetry() {
+        retryAttempt += 1
+        guard retryAttempt <= Self.maxRetries, hasPendingBids else {
+            print("[BidQueue] Max retries (\(Self.maxRetries)) reached, stopping")
+            retryAttempt = 0
+            return
+        }
+
+        let delay = Self.baseDelay * pow(2.0, Double(retryAttempt - 1))
+        print("[BidQueue] Retrying in \(delay)s (attempt \(retryAttempt)/\(Self.maxRetries))")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.syncQueue()
         }
     }
 

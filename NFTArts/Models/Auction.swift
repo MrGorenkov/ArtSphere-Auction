@@ -40,7 +40,10 @@ struct Auction: Identifiable, Hashable {
     }
 
     var minimumNextBid: Double {
-        currentBid + max(currentBid * 0.05, 0.01)
+        if let step = bidStep {
+            return currentBid + step
+        }
+        return currentBid + max(currentBid * 0.05, 0.01)
     }
 
     var isReserveMet: Bool {

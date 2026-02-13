@@ -46,6 +46,64 @@ enum HTTPMethod: String {
     case delete = "DELETE"
 }
 
+// MARK: - Keychain Helper
+
+private struct KeychainHelper {
+    private static let service = "com.gorenkov.NFTArts"
+    private static let account = "authToken"
+
+    static func save(_ token: String) {
+        guard let data = token.data(using: .utf8) else { return }
+
+        // Delete old item first
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        // Add new item
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    static func load() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let token = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return token
+    }
+
+    static func delete() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
 // MARK: - Network Service
 
 final class NetworkService {
@@ -53,12 +111,16 @@ final class NetworkService {
 
     private let session: URLSession
 
-    private static let authTokenKey = "com.nftarts.authToken"
-
-    /// Auth token persisted in UserDefaults so the session survives app restarts.
+    /// Auth token stored securely in Keychain.
     var authToken: String? {
-        get { UserDefaults.standard.string(forKey: Self.authTokenKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.authTokenKey) }
+        get { KeychainHelper.load() }
+        set {
+            if let newValue {
+                KeychainHelper.save(newValue)
+            } else {
+                KeychainHelper.delete()
+            }
+        }
     }
 
     private init() {
@@ -68,11 +130,23 @@ final class NetworkService {
             "Accept": "application/json"
         ]
         self.session = URLSession(configuration: config)
+
+        // One-time migration from UserDefaults to Keychain
+        Self.migrateTokenFromUserDefaults()
     }
 
     /// Convenience setter used by AuthManager and others.
     func setAuthToken(_ token: String?) {
         self.authToken = token
+    }
+
+    /// Migrates any existing token from UserDefaults into Keychain, then removes it.
+    private static func migrateTokenFromUserDefaults() {
+        let legacyKey = "com.nftarts.authToken"
+        if let oldToken = UserDefaults.standard.string(forKey: legacyKey) {
+            KeychainHelper.save(oldToken)
+            UserDefaults.standard.removeObject(forKey: legacyKey)
+        }
     }
 
     // MARK: - Generic JSON Request

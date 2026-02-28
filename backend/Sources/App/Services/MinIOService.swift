@@ -18,6 +18,9 @@ struct MinIOService {
     static let avatarsBucket = "avatars"
     static let filesBucket = "files"
 
+    // Имя основного бакета (для R2 — один бакет, "bucket" параметры становятся папками)
+    let mainBucket: String
+
     init(app: Application) {
         // Cloudflare R2 / AWS S3 mode — используется когда задан AWS_ACCESS_KEY_ID
         if let awsKey = Environment.get("AWS_ACCESS_KEY_ID") {
@@ -26,14 +29,16 @@ struct MinIOService {
             self.region = Environment.get("AWS_REGION") ?? "auto"
             self.endpoint = Environment.get("S3_ENDPOINT") ?? ""
             self.publicUrl = Environment.get("S3_PUBLIC_URL") ?? self.endpoint
+            self.mainBucket = Environment.get("S3_BUCKET") ?? "nftarts"
             self.useSignedRequests = true
         } else {
-            // Локальный MinIO (простые неподписанные PUT)
+            // Локальный MinIO (простые неподписанные PUT, отдельные бакеты)
             self.endpoint = Environment.get("MINIO_ENDPOINT") ?? "http://localhost:9000"
             self.accessKey = Environment.get("MINIO_ACCESS_KEY") ?? "nftarts_minio"
             self.secretKey = Environment.get("MINIO_SECRET_KEY") ?? "minio_secret_key"
             self.region = "us-east-1"
             self.publicUrl = Environment.get("MINIO_PUBLIC_URL") ?? "http://localhost:9000"
+            self.mainBucket = ""  // MinIO: бакет прямо в URL
             self.useSignedRequests = false
         }
     }
@@ -48,7 +53,9 @@ struct MinIOService {
         on client: Client
     ) async throws -> String {
         let bodyData = Data(buffer: data)
-        let urlString = "\(endpoint)/\(bucket)/\(key)"
+        // R2: один бакет + папка; MinIO: отдельные бакеты
+        let s3Path = mainBucket.isEmpty ? "/\(bucket)/\(key)" : "/\(mainBucket)/\(bucket)/\(key)"
+        let urlString = mainBucket.isEmpty ? "\(endpoint)/\(bucket)/\(key)" : "\(endpoint)\(s3Path)"
         guard let url = URL(string: urlString) else {
             throw Abort(.internalServerError, reason: "Invalid S3 URL: \(urlString)")
         }
@@ -61,7 +68,7 @@ struct MinIOService {
             let signer = AWSV4Signer(accessKey: accessKey, secretKey: secretKey, region: region)
             let signedHeaders = signer.signedHeaders(
                 method: "PUT",
-                path: "/\(bucket)/\(key)",
+                path: s3Path,
                 body: bodyData,
                 contentType: contentType,
                 host: host
@@ -83,11 +90,13 @@ struct MinIOService {
     }
 
     func publicURL(bucket: String, key: String) -> String {
+        // R2 r2.dev URL уже включает бакет как корень — просто folder/key
         "\(publicUrl)/\(bucket)/\(key)"
     }
 
     func delete(bucket: String, key: String, on client: Client) async throws {
-        let urlString = "\(endpoint)/\(bucket)/\(key)"
+        let s3Path = mainBucket.isEmpty ? "/\(bucket)/\(key)" : "/\(mainBucket)/\(bucket)/\(key)"
+        let urlString = mainBucket.isEmpty ? "\(endpoint)/\(bucket)/\(key)" : "\(endpoint)\(s3Path)"
         guard let url = URL(string: urlString) else { return }
 
         var headers = HTTPHeaders()
@@ -97,7 +106,7 @@ struct MinIOService {
             let signer = AWSV4Signer(accessKey: accessKey, secretKey: secretKey, region: region)
             let signedHeaders = signer.signedHeaders(
                 method: "DELETE",
-                path: "/\(bucket)/\(key)",
+                path: s3Path,
                 body: Data(),
                 contentType: "application/octet-stream",
                 host: host

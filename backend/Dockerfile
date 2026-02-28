@@ -9,7 +9,6 @@ RUN swift package resolve
 
 # Copy source code
 COPY Sources/ Sources/
-COPY Tests/ Tests/
 
 # Build in release mode
 RUN swift build -c release --static-swift-stdlib

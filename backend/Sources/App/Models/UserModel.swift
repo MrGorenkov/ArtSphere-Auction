@@ -15,6 +15,7 @@ final class UserModel: Model, Content, @unchecked Sendable {
     @Field(key: "balance") var balance: Double
     @Field(key: "password_hash") var passwordHash: String
     @Field(key: "is_active") var isActive: Bool
+    @Field(key: "is_admin") var isAdmin: Bool
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) var updatedAt: Date?
 
@@ -45,6 +46,7 @@ final class UserModel: Model, Content, @unchecked Sendable {
         self.balance = balance
         self.passwordHash = passwordHash
         self.isActive = true
+        self.isAdmin = false
     }
 }
 

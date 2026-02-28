@@ -8,7 +8,7 @@ struct MainTabView: View {
 
     enum Tab: String, CaseIterable {
         case feed
-        case explore
+        case messages
         case create
         case collection
         case profile
@@ -16,7 +16,7 @@ struct MainTabView: View {
         var iconName: String {
             switch self {
             case .feed: return "flame.fill"
-            case .explore: return "magnifyingglass"
+            case .messages: return "bubble.left.and.bubble.right.fill"
             case .create: return "plus.circle.fill"
             case .collection: return "square.grid.2x2.fill"
             case .profile: return "person.fill"
@@ -32,11 +32,11 @@ struct MainTabView: View {
                 }
                 .tag(Tab.feed)
 
-            ExploreView()
+            MessagesView()
                 .tabItem {
-                    Label(L10n.tabExplore, systemImage: Tab.explore.iconName)
+                    Label(L10n.messages, systemImage: Tab.messages.iconName)
                 }
-                .tag(Tab.explore)
+                .tag(Tab.messages)
 
             Color.clear
                 .tabItem {

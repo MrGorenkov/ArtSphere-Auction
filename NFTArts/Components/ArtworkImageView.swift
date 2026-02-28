@@ -37,7 +37,13 @@ struct ArtworkImageView: View {
             }
         }
 
-        // 2. URL-based image from backend
+        // 2. Bundled asset image
+        if artwork.imageSource == .bundled, let uiImage = UIImage(named: artwork.imageName) {
+            withAnimation(.easeIn(duration: 0.3)) { self.image = uiImage }
+            return
+        }
+
+        // 3. URL-based image from backend
         if artwork.imageSource == .url, let urlString = artwork.imageURL,
            let url = URL(string: urlString) {
             Task {

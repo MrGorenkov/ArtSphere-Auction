@@ -29,12 +29,11 @@ struct FeedView: View {
             .navigationTitle(L10n.feedTitle)
             .searchable(text: $viewModel.searchText, prompt: L10n.searchArtworks)
             .refreshable {
-                cardsAppeared = false
                 await auctionService.loadFromAPI()
-                cardsAppeared = true
             }
             .onAppear {
                 viewModel.bind(to: auctionService)
+                MetricsService.shared.trackFeatureUsage("feed")
             }
             .overlay {
                 if viewModel.isLoading {

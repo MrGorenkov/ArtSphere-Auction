@@ -31,7 +31,9 @@ final class AuctionService: ObservableObject {
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] update in
-                self?.handleWSBidUpdate(update)
+                Task { @MainActor in
+                    self?.handleWSBidUpdate(update)
+                }
             }
             .store(in: &cancellables)
 
@@ -39,7 +41,9 @@ final class AuctionService: ObservableObject {
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] update in
-                self?.handleWSAuctionUpdate(update)
+                Task { @MainActor in
+                    self?.handleWSAuctionUpdate(update)
+                }
             }
             .store(in: &cancellables)
 
@@ -47,7 +51,9 @@ final class AuctionService: ObservableObject {
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
-                self?.handleWSUserNotification(notification)
+                Task { @MainActor in
+                    self?.handleWSUserNotification(notification)
+                }
             }
             .store(in: &cancellables)
 
@@ -58,6 +64,7 @@ final class AuctionService: ObservableObject {
 
     func loadFromAPI() async {
         await MainActor.run { isLoadingFromAPI = true }
+        let apiStart = CFAbsoluteTimeGetCurrent()
 
         do {
             let styles = try await network.fetchStyles()
@@ -110,6 +117,9 @@ final class AuctionService: ObservableObject {
                 self.isLoadingFromAPI = false
             }
 
+            let apiElapsed = (CFAbsoluteTimeGetCurrent() - apiStart) * 1000
+            MetricsService.shared.record(category: "network", name: "fetch_artworks_ms", value: apiElapsed, unit: "ms")
+
             // Subscribe to global auction feed via WebSocket
             webSocket.subscribeToAuctionFeed()
 
@@ -119,12 +129,15 @@ final class AuctionService: ObservableObject {
             }
 
         } catch {
-            print("API load failed, using local data: \(error)")
+            print("API load failed: \(error)")
             await MainActor.run {
                 self.isOnline = false
                 self.isLoadingFromAPI = false
             }
-            await loadLocalData()
+            // Only load mock data if we have no existing auctions
+            if await MainActor.run(body: { self.auctions.isEmpty }) {
+                await loadLocalData()
+            }
         }
     }
 
@@ -271,19 +284,20 @@ final class AuctionService: ObservableObject {
                         currentUser.collections[defaultIdx].artworkIds.append(artworkId)
                     }
                     wonAuctions.append(auctions[index])
-                    addNotification(title: "Auction Won!", message: "You won \"\(auctions[index].artwork.title)\" for \(highestBid.formattedAmount)!", type: .auctionWon)
+                    addNotification(title: L10n.auctionWon, message: L10n.auctionWonNotif(auctions[index].artwork.title, highestBid.formattedAmount), type: .auctionWon)
                 }
             } else {
-                addNotification(title: "Auction Ended", message: "\"\(auctions[index].artwork.title)\" was sold to \(highestBid.userName)", type: .auctionEnded)
+                addNotification(title: L10n.auctionEndedTitle, message: L10n.auctionEndedSold(auctions[index].artwork.title, highestBid.userName), type: .auctionEnded)
             }
         } else {
             auctions[index].status = .ended
-            addNotification(title: "Auction Ended", message: "\"\(auctions[index].artwork.title)\" received no bids", type: .auctionEnded)
+            addNotification(title: L10n.auctionEndedTitle, message: L10n.auctionEndedNoBids(auctions[index].artwork.title), type: .auctionEnded)
         }
     }
 
     // MARK: - WebSocket Handlers
 
+    @MainActor
     private func handleWSBidUpdate(_ update: WebSocketService.WSBidUpdate) {
         guard let index = auctions.firstIndex(where: { $0.id.uuidString.lowercased() == update.auctionId.lowercased() }) else { return }
 
@@ -299,10 +313,11 @@ final class AuctionService: ObservableObject {
         auctions[index].currentBid = update.currentBid
 
         if bid.userId != currentUser.id {
-            addNotification(title: "New Bid", message: "\(bid.userName) bid \(bid.formattedAmount) on \"\(auctions[index].artwork.title)\"", type: .newBid)
+            addNotification(title: L10n.newBid, message: L10n.newBidNotif(bid.userName, bid.formattedAmount, auctions[index].artwork.title), type: .newBid)
         }
     }
 
+    @MainActor
     private func handleWSAuctionUpdate(_ update: WebSocketService.WSAuctionStatusUpdate) {
         guard let index = auctions.firstIndex(where: { $0.id.uuidString.lowercased() == update.auctionId.lowercased() }) else { return }
 
@@ -316,6 +331,7 @@ final class AuctionService: ObservableObject {
         }
     }
 
+    @MainActor
     private func handleWSUserNotification(_ notification: WebSocketService.WSUserNotification) {
         switch notification.type {
         case "outbid":
@@ -480,6 +496,9 @@ final class AuctionService: ObservableObject {
 
     private func startBotBidding() {
         guard !isOnline else { return }
+
+        botBidTimer?.invalidate()
+
         botBidTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
             self?.simulateBotBid()
         }
@@ -489,8 +508,8 @@ final class AuctionService: ObservableObject {
         let activeAuctions = auctions.enumerated().filter { $0.element.isActive }
         guard !activeAuctions.isEmpty, Double.random(in: 0...1) < 0.3 else { return }
 
-        let randomPick = activeAuctions.randomElement()!
-        let bidder = botBidders.randomElement()!
+        guard let randomPick = activeAuctions.randomElement(),
+              let bidder = botBidders.randomElement() else { return }
         let increment = Double.random(in: 0.01...max(randomPick.element.currentBid * 0.1, 0.05))
         let bidAmount = randomPick.element.currentBid + increment
 
@@ -498,19 +517,20 @@ final class AuctionService: ObservableObject {
         auctions[randomPick.offset].bids.append(bid)
         auctions[randomPick.offset].currentBid = bidAmount
 
-        addNotification(title: "New Bid", message: "\(bidder.0) bid \(bid.formattedAmount) on \"\(randomPick.element.artwork.title)\"", type: .newBid)
+        addNotification(title: L10n.newBid, message: L10n.newBidNotif(bidder.0, bid.formattedAmount, randomPick.element.artwork.title), type: .newBid)
     }
 
     // MARK: - User Actions
 
     func placeBid(on auctionId: UUID, amount: Double) -> BidResult {
-        guard let index = auctions.firstIndex(where: { $0.id == auctionId }) else { return .failure("Auction not found") }
+        guard let index = auctions.firstIndex(where: { $0.id == auctionId }) else { return .failure(L10n.auctionNotFound) }
         let auction = auctions[index]
-        guard auction.isActive else { return .failure("Auction is no longer active") }
-        guard amount >= auction.minimumNextBid else { return .failure("Bid must be at least \(String(format: "%.2f", auction.minimumNextBid)) ETH") }
-        guard amount <= currentUser.balance else { return .failure("Insufficient balance") }
+        guard auction.isActive else { return .failure(L10n.auctionNoLongerActive) }
+        guard amount >= auction.minimumNextBid else { return .failure(L10n.bidMinimumError(String(format: "%.2f", auction.minimumNextBid))) }
+        guard amount <= currentUser.balance else { return .failure(L10n.insufficientBalance) }
 
         analytics.trackBid(auctionId: auctionId.uuidString, amount: amount, artworkTitle: auction.artwork.title)
+        MetricsService.shared.trackBidPlaced(amount: amount, auctionId: auctionId.uuidString)
 
         if isOnline {
             // When online, send to API — the WS feed will broadcast the update back
@@ -519,7 +539,7 @@ final class AuctionService: ObservableObject {
                 do {
                     let apiBid = try await network.placeBid(request: APIPlaceBidRequest(auctionId: auctionId.uuidString, amount: amount))
                     await MainActor.run {
-                        self.addNotification(title: "Bid Placed", message: "You bid \(String(format: "%.2f ETH", apiBid.amount)) on \"\(artworkTitle)\"", type: .bidPlaced)
+                        self.addNotification(title: L10n.bidPlaced, message: L10n.bidPlacedNotif(String(format: "%.2f ETH", apiBid.amount), artworkTitle), type: .bidPlaced)
                     }
                 } catch let apiError as APIError {
                     await MainActor.run {
@@ -553,7 +573,7 @@ final class AuctionService: ObservableObject {
             auctions[index].bids.append(bid)
             auctions[index].currentBid = amount
             bidQueue.queueBid(auctionId: auctionId, amount: amount)
-            addNotification(title: "Bid Queued", message: "You bid \(bid.formattedAmount) — will sync when online", type: .bidPlaced)
+            addNotification(title: L10n.bidQueued, message: L10n.bidQueuedNotif(bid.formattedAmount), type: .bidPlaced)
             return .success(bid)
         }
     }
@@ -576,7 +596,18 @@ final class AuctionService: ObservableObject {
         let collection = NFTCollection(name: name, description: description)
         currentUser.collections.append(collection)
         if isOnline {
-            Task { try? await network.createCollection(request: APICreateCollectionRequest(name: name, description: description, isPrivate: false)) }
+            let localId = collection.id
+            Task {
+                do {
+                    let apiCollection = try await network.createCollection(request: APICreateCollectionRequest(name: name, description: description, isPrivate: false))
+                    let serverId = UUID(uuidString: apiCollection.id) ?? localId
+                    await MainActor.run {
+                        if let idx = self.currentUser.collections.firstIndex(where: { $0.id == localId }) {
+                            self.currentUser.collections[idx].id = serverId
+                        }
+                    }
+                } catch {}
+            }
         }
         return collection
     }
@@ -608,7 +639,28 @@ final class AuctionService: ObservableObject {
             if !currentUser.collections[idx].artworkIds.contains(artworkId) {
                 currentUser.collections[idx].artworkIds.append(artworkId)
                 currentUser.collections[idx].updatedAt = Date()
-                if isOnline { Task { try? await network.addToCollection(collectionId: collectionId.uuidString, artworkId: artworkId.uuidString) } }
+                if isOnline {
+                    Task {
+                        do {
+                            try await network.addToCollection(collectionId: collectionId.uuidString, artworkId: artworkId.uuidString)
+                        } catch {
+                            // Collection might not exist on server — create it and retry
+                            let col = await MainActor.run { self.currentUser.collections.first(where: { $0.id == collectionId }) }
+                            guard let col else { return }
+                            do {
+                                let apiCol = try await network.createCollection(request: APICreateCollectionRequest(name: col.name, description: col.description, isPrivate: false))
+                                if let serverId = UUID(uuidString: apiCol.id) {
+                                    await MainActor.run {
+                                        if let i = self.currentUser.collections.firstIndex(where: { $0.id == collectionId }) {
+                                            self.currentUser.collections[i].id = serverId
+                                        }
+                                    }
+                                    try? await network.addToCollection(collectionId: serverId.uuidString, artworkId: artworkId.uuidString)
+                                }
+                            } catch {}
+                        }
+                    }
+                }
             }
         }
     }
@@ -626,12 +678,14 @@ final class AuctionService: ObservableObject {
     func createNFTFromImage(image: UIImage, title: String, description: String, category: NFTArtwork.ArtworkCategory, startingPrice: Double, durationHours: Double) -> Auction {
         analytics.trackNFTCreated(title: title, category: category.rawValue, startingPrice: startingPrice)
         let imageData = image.jpegData(compressionQuality: 0.8)
+        let complexityScore = NormalMapGenerator.calculateTextureMetric(from: image)
         let artwork = NFTArtwork(
             title: title, artistName: currentUser.displayName, description: description,
             imageName: "user_\(UUID().uuidString)", category: category,
             tokenId: String(format: "%04d", auctions.count + 1),
             contractAddress: "0x\(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(40))",
-            blockchain: .polygon, imageSource: .uploaded, localImageData: imageData
+            blockchain: .polygon, imageSource: .uploaded, localImageData: imageData,
+            textureComplexityScore: complexityScore
         )
         let auction = Auction(
             id: UUID(), artwork: artwork, startTime: Date(),
@@ -641,7 +695,7 @@ final class AuctionService: ObservableObject {
         )
         auctions.insert(auction, at: 0)
         featuredAuctions = Array(auctions.prefix(3))
-        addNotification(title: "NFT Created", message: "Your artwork \"\(title)\" is now live!", type: .nftCreated)
+        addNotification(title: L10n.nftCreatedTitle, message: L10n.nftCreatedNotif(title), type: .nftCreated)
         return auction
     }
 
@@ -679,19 +733,20 @@ final class AuctionService: ObservableObject {
         User(username: "artcollector", displayName: "Alex G.", walletAddress: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", bio: "Digital art enthusiast & NFT collector", balance: 25.0)
     }
 
-    private static let artworkData: [(String, String, String, NFTArtwork.ArtworkCategory)] = [
-        ("Cosmic Dreams", "Elena Vasquez", "A mesmerizing journey through digital cosmos.", .digitalPainting),
-        ("Neural Garden", "Kai Tanaka", "Generated by a custom neural network.", .generativeArt),
-        ("Neon District", "Marcus Chen", "Cyberpunk-inspired urban landscape.", .photography),
-        ("Ethereal Flow", "Sofia Andersen", "Abstract representation of blockchain data flows.", .abstract),
-        ("Pixel Samurai", "Yuki Mori", "A tribute to Japanese warrior culture in pixel art.", .pixel),
-        ("Crystal Matrix", "David Park", "3D crystalline structures inspired by molecular geometry.", .threeD),
-        ("Digital Sunrise", "Amara Okafor", "Digital landscape capturing the first light.", .digitalPainting),
-        ("Quantum Bloom", "Leo Fischer", "Generative floral patterns from quantum distributions.", .generativeArt),
-        ("Urban Reflections", "Nina Volkov", "Street photography reimagined through fractals.", .photography),
-        ("Void Walker", "Rex Sterling", "Abstract exploration of negative space.", .abstract),
-        ("Crypto Cats", "Mia Zhang", "Playful pixel art collection.", .pixel),
-        ("Holographic Temple", "Arjun Patel", "Sacred architecture as holographic 3D.", .threeD),
+    // (title, artist, description, category, assetName or "" for procedural)
+    private static let artworkData: [(String, String, String, NFTArtwork.ArtworkCategory, String)] = [
+        ("Звёздная ночь", "Винсент ван Гог", "Масло на холсте, 1889. Вихрящееся ночное небо над деревней.", .digitalPainting, "starry_night"),
+        ("Подсолнухи", "Винсент ван Гог", "Серия натюрмортов, масло на холсте, 1888.", .digitalPainting, "sunflowers"),
+        ("Водяные лилии", "Клод Моне", "Импрессионистский садовый пейзаж, масло на холсте, 1906.", .abstract, "water_lilies"),
+        ("Впечатление. Восход солнца", "Клод Моне", "Картина, давшая название импрессионизму, 1872.", .digitalPainting, "impression_sunrise"),
+        ("Поцелуй", "Густав Климт", "Шедевр золотого периода, масло и сусальное золото, 1907–1908.", .abstract, "the_kiss"),
+        ("Крик", "Эдвард Мунк", "Икона экспрессионизма, масло и пастель, 1893.", .abstract, "the_scream"),
+        ("Композиция VIII", "Василий Кандинский", "Абстрактная геометрическая композиция, масло на холсте, 1923.", .generativeArt, "composition_viii"),
+        ("Завтрак гребцов", "Пьер-Огюст Ренуар", "Масло на холсте, 1881. Сцена обеда на открытом воздухе.", .photography, "boating_party"),
+        ("Гора Сент-Виктуар", "Поль Сезанн", "Постимпрессионистский пейзаж, масло на холсте, 1902.", .digitalPainting, "mont_sainte_victoire"),
+        ("Большая волна", "Кацусика Хокусай", "Гравюра из серии «36 видов Фудзи», 1831.", .pixel, "great_wave"),
+        ("Digital Sunrise", "Amara Okafor", "Digital landscape capturing the first light.", .digitalPainting, ""),
+        ("Quantum Bloom", "Leo Fischer", "Generative floral patterns from quantum distributions.", .generativeArt, ""),
     ]
 
     private static func generateMockAuctions() -> [Auction] {
@@ -714,7 +769,8 @@ final class AuctionService: ObservableObject {
 
     private static func generateMockArtworks() -> [NFTArtwork] {
         artworkData.enumerated().map { index, data in
-            NFTArtwork(title: data.0, artistName: data.1, description: data.2, imageName: "artwork_\(index)", category: data.3, createdAt: Date().addingTimeInterval(-Double(index) * 86400), tokenId: String(format: "%04d", index + 1), contractAddress: "0x\(String(repeating: "a", count: 40))", blockchain: index % 2 == 0 ? .ethereum : .polygon)
+            let hasBundled = !data.4.isEmpty
+            return NFTArtwork(title: data.0, artistName: data.1, description: data.2, imageName: hasBundled ? data.4 : "artwork_\(index)", category: data.3, createdAt: Date().addingTimeInterval(-Double(index) * 86400), tokenId: String(format: "%04d", index + 1), contractAddress: "0x\(String(repeating: "a", count: 40))", blockchain: index % 2 == 0 ? .ethereum : .polygon, imageSource: hasBundled ? .bundled : .procedural)
         }
     }
 

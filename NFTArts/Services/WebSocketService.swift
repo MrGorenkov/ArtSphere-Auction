@@ -26,6 +26,9 @@ final class WebSocketService: ObservableObject {
     private var userTask: URLSessionWebSocketTask?
     private let session: URLSession
 
+    private var feedReceiveTask: Task<Void, Never>?
+    private var userReceiveTask: Task<Void, Never>?
+
     // MARK: - Reconnect State
 
     private var feedReconnectAttempts: Int = 0
@@ -38,7 +41,7 @@ final class WebSocketService: ObservableObject {
 
     private var wsBaseURL: String {
         #if DEBUG
-        return "ws://192.168.1.54:8080"
+        return "ws://172.20.10.2:8080"
         #else
         return "wss://api.nftarts.com"
         #endif
@@ -73,6 +76,8 @@ final class WebSocketService: ObservableObject {
 
     /// Closes the auction feed WebSocket connection.
     func unsubscribeFromFeed() {
+        feedReceiveTask?.cancel()
+        feedReceiveTask = nil
         feedTask?.cancel(with: .goingAway, reason: nil)
         feedTask = nil
         feedReconnectAttempts = 0
@@ -101,6 +106,8 @@ final class WebSocketService: ObservableObject {
 
     /// Closes the user notifications WebSocket connection.
     func unsubscribeFromUser() {
+        userReceiveTask?.cancel()
+        userReceiveTask = nil
         userTask?.cancel(with: .goingAway, reason: nil)
         userTask = nil
         currentUserId = nil
@@ -118,26 +125,29 @@ final class WebSocketService: ObservableObject {
     // MARK: - Feed Message Handling
 
     private func receiveFeedMessages() {
-        feedTask?.receive { [weak self] result in
-            guard let self else { return }
+        feedReceiveTask?.cancel()
 
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let text):
-                    self.handleFeedMessage(text)
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
+        feedReceiveTask = Task { [weak self] in
+            guard let self, let task = self.feedTask else { return }
+
+            while !Task.isCancelled {
+                do {
+                    let message = try await task.receive()
+                    switch message {
+                    case .string(let text):
                         self.handleFeedMessage(text)
+                    case .data(let data):
+                        if let text = String(data: data, encoding: .utf8) {
+                            self.handleFeedMessage(text)
+                        }
+                    @unknown default:
+                        break
                     }
-                @unknown default:
+                } catch {
+                    await MainActor.run { self.isFeedConnected = false }
+                    self.attemptFeedReconnect()
                     break
                 }
-                self.receiveFeedMessages()
-
-            case .failure:
-                DispatchQueue.main.async { self.isFeedConnected = false }
-                self.attemptFeedReconnect()
             }
         }
     }
@@ -167,26 +177,29 @@ final class WebSocketService: ObservableObject {
     // MARK: - User Message Handling
 
     private func receiveUserMessages() {
-        userTask?.receive { [weak self] result in
-            guard let self else { return }
+        userReceiveTask?.cancel()
 
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let text):
-                    self.handleUserMessage(text)
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
+        userReceiveTask = Task { [weak self] in
+            guard let self, let task = self.userTask else { return }
+
+            while !Task.isCancelled {
+                do {
+                    let message = try await task.receive()
+                    switch message {
+                    case .string(let text):
                         self.handleUserMessage(text)
+                    case .data(let data):
+                        if let text = String(data: data, encoding: .utf8) {
+                            self.handleUserMessage(text)
+                        }
+                    @unknown default:
+                        break
                     }
-                @unknown default:
+                } catch {
+                    await MainActor.run { self.isUserConnected = false }
+                    self.attemptUserReconnect()
                     break
                 }
-                self.receiveUserMessages()
-
-            case .failure:
-                DispatchQueue.main.async { self.isUserConnected = false }
-                self.attemptUserReconnect()
             }
         }
     }

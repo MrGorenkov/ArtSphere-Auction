@@ -11,6 +11,7 @@ struct UserController: RouteCollection {
         users.put("me", use: updateProfile)
         users.on(.POST, "me", "avatar", body: .collect(maxSize: "5mb"), use: uploadAvatar)
         users.post("me", "device-token", use: registerDeviceToken)
+        users.get("search", use: searchUsers)
     }
 
     // GET /api/v1/users/me
@@ -147,6 +148,35 @@ struct UserController: RouteCollection {
             .run()
 
         return .ok
+    }
+
+    // GET /api/v1/users/search?q=name
+    func searchUsers(req: Request) async throws -> [UserDTO] {
+        let _ = try req.auth.require(UUID.self)
+        guard let query = req.query[String.self, at: "q"], !query.isEmpty else {
+            throw Abort(.badRequest, reason: "Query parameter 'q' is required")
+        }
+
+        let pattern = "%\(query)%"
+        let rows = try await (req.db as! SQLDatabase).raw("""
+            SELECT id, username, display_name, wallet_address, bio, balance, avatar_url
+            FROM users
+            WHERE display_name ILIKE \(bind: pattern) OR username ILIKE \(bind: pattern)
+            ORDER BY display_name
+            LIMIT 20
+        """).all()
+
+        return try rows.map { row in
+            UserDTO(
+                id: try row.decode(column: "id", as: UUID.self).uuidString,
+                username: try row.decode(column: "username", as: String.self),
+                displayName: try row.decode(column: "display_name", as: String.self),
+                walletAddress: try row.decode(column: "wallet_address", as: String.self),
+                bio: try? row.decode(column: "bio", as: String.self),
+                balance: try row.decode(column: "balance", as: Double.self),
+                avatarUrl: try? row.decode(column: "avatar_url", as: String.self)
+            )
+        }
     }
 }
 

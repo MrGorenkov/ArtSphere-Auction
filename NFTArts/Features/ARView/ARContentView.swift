@@ -27,29 +27,8 @@ struct ARContentView: View {
             }
             .fullScreenCover(isPresented: $showARSession) {
                 if let artwork = selectedArtwork {
-                    ARViewerRepresentable(artwork: artwork)
-                        .ignoresSafeArea()
-                        .overlay(alignment: .topTrailing) {
-                            Button {
-                                showARSession = false
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 30))
-                                    .foregroundStyle(.white)
-                                    .shadow(radius: 4)
-                            }
-                            .padding(20)
-                        }
-                        .overlay(alignment: .bottom) {
-                            Text(L10n.tapToPlace)
-                                .font(NFTTypography.subheadline)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Capsule())
-                                .padding(.bottom, 40)
-                        }
+                    ARShowroomView(artwork: artwork)
+                        .environmentObject(auctionService)
                 }
             }
         }
@@ -152,6 +131,7 @@ struct ARContentView: View {
 struct ArtworkPickerSheet: View {
     let auctions: [Auction]
     @Binding var selectedArtwork: NFTArtwork?
+    var onSelect: ((NFTArtwork) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -164,6 +144,7 @@ struct ArtworkPickerSheet: View {
                     ForEach(auctions) { auction in
                         Button {
                             selectedArtwork = auction.artwork
+                            onSelect?(auction.artwork)
                             dismiss()
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
@@ -196,100 +177,6 @@ struct ArtworkPickerSheet: View {
                     Button(L10n.cancel) { dismiss() }
                 }
             }
-        }
-    }
-}
-
-// MARK: - AR Viewer (ARKit + RealityKit)
-
-struct ARViewerRepresentable: UIViewRepresentable {
-    let artwork: NFTArtwork
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(artwork: artwork)
-    }
-
-    func makeUIView(context: Context) -> ARView {
-        let arView = ARView(frame: .zero)
-
-        // Configure AR session
-        let config = ARWorldTrackingConfiguration()
-        config.planeDetection = [.horizontal, .vertical]
-        config.environmentTexturing = .automatic
-        arView.session.run(config)
-
-        // Add tap gesture for placing artwork
-        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        arView.addGestureRecognizer(tapGesture)
-        context.coordinator.arView = arView
-
-        return arView
-    }
-
-    func updateUIView(_ uiView: ARView, context: Context) {}
-
-    class Coordinator: NSObject {
-        let artwork: NFTArtwork
-        weak var arView: ARView?
-        private var hasPlaced = false
-
-        init(artwork: NFTArtwork) {
-            self.artwork = artwork
-        }
-
-        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            guard let arView = arView else { return }
-
-            let location = gesture.location(in: arView)
-
-            // Raycast to find a surface
-            let results = arView.raycast(from: location, allowing: .estimatedPlane, alignment: .any)
-
-            guard let firstResult = results.first else { return }
-
-            // Create artwork entity
-            let artworkImage: UIImage
-            if artwork.imageSource == .uploaded,
-               let data = artwork.localImageData,
-               let img = UIImage(data: data) {
-                artworkImage = img
-            } else {
-                artworkImage = MockDataService.generateArtworkImage(for: artwork, size: CGSize(width: 512, height: 512))
-            }
-
-            // Create a plane mesh
-            let mesh = MeshResource.generatePlane(width: 0.4, height: 0.4)
-
-            // Create material with artwork texture
-            var material = SimpleMaterial()
-            if let cgImage = artworkImage.cgImage,
-               let texture = try? TextureResource.generate(from: cgImage, options: .init(semantic: .color)) {
-                material.color = .init(tint: .white, texture: .init(texture))
-            }
-
-            let modelEntity = ModelEntity(mesh: mesh, materials: [material])
-
-            // Add frame
-            let frameMesh = MeshResource.generateBox(width: 0.42, height: 0.01, depth: 0.42, cornerRadius: 0.005)
-            var frameMaterial = SimpleMaterial()
-            frameMaterial.color = .init(tint: UIColor(white: 0.15, alpha: 1.0))
-            frameMaterial.metallic = .float(0.8)
-            frameMaterial.roughness = .float(0.3)
-            let frameEntity = ModelEntity(mesh: frameMesh, materials: [frameMaterial])
-            frameEntity.position = [0, -0.005, 0]
-
-            // Create anchor
-            let anchor = AnchorEntity(world: firstResult.worldTransform)
-            anchor.addChild(modelEntity)
-            anchor.addChild(frameEntity)
-
-            // Remove previous if already placed
-            if hasPlaced {
-                arView.scene.anchors.removeAll()
-            }
-
-            arView.scene.addAnchor(anchor)
-            hasPlaced = true
         }
     }
 }

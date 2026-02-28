@@ -15,7 +15,7 @@ private enum AuthMode: String, CaseIterable, Identifiable {
 /// When `authManager.isAuthenticated` becomes `true` the parent `NFTArtsApp`
 /// swaps to `MainTabView` automatically -- no navigation here is required.
 struct LoginView: View {
-    @StateObject private var authManager = AuthManager.shared
+    @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var lang: LanguageManager
 
     // MARK: Form state

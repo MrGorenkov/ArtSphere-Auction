@@ -31,6 +31,7 @@ CREATE TABLE users (
     balance         DOUBLE PRECISION DEFAULT 10.0,
     password_hash   TEXT NOT NULL,                          -- пароль (bcrypt)
     is_active       BOOLEAN DEFAULT TRUE,
+    is_admin        BOOLEAN DEFAULT FALSE,                    -- флаг администратора
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );

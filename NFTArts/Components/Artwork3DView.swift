@@ -5,6 +5,7 @@ struct Artwork3DView: UIViewRepresentable {
     let artwork: NFTArtwork
     var artworkImage: UIImage?
     var allowsInteraction: Bool = true
+    var showComplexityOverlay: Bool = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -16,7 +17,7 @@ struct Artwork3DView: UIViewRepresentable {
         scnView.antialiasingMode = .multisampling4X
         scnView.autoenablesDefaultLighting = false
 
-        let scene = createScene()
+        let scene = createScene(coordinator: context.coordinator)
         scnView.scene = scene
         context.coordinator.scene = scene
 
@@ -30,11 +31,25 @@ struct Artwork3DView: UIViewRepresentable {
         return scnView
     }
 
-    func updateUIView(_ uiView: SCNView, context: Context) {}
+    func updateUIView(_ uiView: SCNView, context: Context) {
+        context.coordinator.setComplexityOverlay(showComplexityOverlay)
+    }
+
+    static func dismantleUIView(_ uiView: SCNView, coordinator: Coordinator) {
+        coordinator.stopAnimations()
+        uiView.scene = nil
+        coordinator.scene = nil
+    }
 
     // MARK: - Scene Creation
 
-    private func createScene() -> SCNScene {
+    private func createScene(coordinator: Coordinator) -> SCNScene {
+        let sceneStart = CFAbsoluteTimeGetCurrent()
+        defer {
+            let elapsed = (CFAbsoluteTimeGetCurrent() - sceneStart) * 1000
+            MetricsService.shared.record(category: "3d_rendering", name: "scene_setup_ms", value: elapsed, unit: "ms",
+                                         metadata: ["artwork": artwork.title])
+        }
         let scene = SCNScene()
 
         // Resolve the image to use
@@ -45,11 +60,33 @@ struct Artwork3DView: UIViewRepresentable {
                   let data = artwork.localImageData,
                   let img = UIImage(data: data) {
             sourceImage = img
+        } else if artwork.imageSource == .bundled,
+                  let img = UIImage(named: artwork.imageName) {
+            sourceImage = img
+        } else if artwork.imageSource == .url,
+                  let urlString = artwork.imageURL,
+                  let url = URL(string: urlString),
+                  let data = try? Data(contentsOf: url),
+                  let img = UIImage(data: data) {
+            sourceImage = img
         } else {
             sourceImage = MockDataService.generateArtworkImage(for: artwork, size: CGSize(width: 512, height: 512))
         }
 
         let normalMap = NormalMapGenerator.generate(from: sourceImage)
+
+        // Calculate and record texture complexity metric for scientific analysis
+        if let complexity = NormalMapGenerator.calculateTextureMetric(from: sourceImage) {
+            MetricsService.shared.record(
+                category: "image_analysis", name: "texture_complexity",
+                value: complexity, unit: "ratio",
+                metadata: ["artwork": artwork.title]
+            )
+        }
+
+        // Store images in coordinator for overlay toggling
+        coordinator.originalImage = sourceImage
+        coordinator.heatmapImage = NormalMapGenerator.generateComplexityHeatmap(from: sourceImage)
 
         // Parent node for grouped animation
         let parentNode = SCNNode()
@@ -59,22 +96,29 @@ struct Artwork3DView: UIViewRepresentable {
         // Artwork plane with subdivision for depth effect
         let planeGeometry = SCNPlane(width: 2.0, height: 2.0)
         planeGeometry.cornerRadius = 0.05
-        planeGeometry.widthSegmentCount = 48
-        planeGeometry.heightSegmentCount = 48
+        planeGeometry.widthSegmentCount = 64
+        planeGeometry.heightSegmentCount = 64
 
         let material = SCNMaterial()
         material.diffuse.contents = sourceImage
         material.normal.contents = normalMap
-        material.normal.intensity = 1.0
-        material.roughness.contents = 0.35
-        material.metalness.contents = 0.05
+        material.normal.intensity = 1.5
+        material.roughness.contents = 0.45
+        material.metalness.contents = 0.03
         material.lightingModel = .physicallyBased
         material.isDoubleSided = true
+        // Displacement mapping for physical brushstroke relief
+        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage)
+        material.displacement.contents = heightMap
+        material.displacement.intensity = 0.015
         planeGeometry.materials = [material]
 
         let artworkNode = SCNNode(geometry: planeGeometry)
         artworkNode.name = "artwork"
         parentNode.addChildNode(artworkNode)
+
+        // Store reference for material switching
+        coordinator.artworkMaterial = material
 
         // Frame (4 separate bars for realistic look)
         let frameThickness: CGFloat = 0.08
@@ -139,8 +183,12 @@ struct Artwork3DView: UIViewRepresentable {
             SCNAction.rotateBy(x: -0.10, y: 0, z: 0, duration: 8.0),
             SCNAction.rotateBy(x: 0.05, y: 0, z: 0, duration: 4.0)
         ])
-        parentNode.runAction(.repeatForever(oscillateY))
-        parentNode.runAction(.repeatForever(oscillateX))
+        let oscillateYKey = "oscillateY"
+        let oscillateXKey = "oscillateX"
+        parentNode.runAction(.repeatForever(oscillateY), forKey: oscillateYKey)
+        parentNode.runAction(.repeatForever(oscillateX), forKey: oscillateXKey)
+
+        coordinator.animationKeys = [oscillateYKey, oscillateXKey]
 
         return scene
     }
@@ -175,6 +223,16 @@ struct Artwork3DView: UIViewRepresentable {
         rimLight.look(at: SCNVector3Zero)
         scene.rootNode.addChildNode(rimLight)
 
+        // Raking light — low-angle light to catch brushstroke texture edges
+        let rakingLight = SCNNode()
+        rakingLight.light = SCNLight()
+        rakingLight.light?.type = .directional
+        rakingLight.light?.intensity = 200
+        rakingLight.light?.color = UIColor(white: 0.9, alpha: 1.0)
+        rakingLight.position = SCNVector3(5, 0.3, 2)
+        rakingLight.look(at: SCNVector3Zero)
+        scene.rootNode.addChildNode(rakingLight)
+
         let ambientLight = SCNNode()
         ambientLight.light = SCNLight()
         ambientLight.light?.type = .ambient
@@ -184,6 +242,39 @@ struct Artwork3DView: UIViewRepresentable {
     }
 
     class Coordinator {
-        var scene: SCNScene?
+        weak var scene: SCNScene?
+        var artworkMaterial: SCNMaterial?
+        var originalImage: UIImage?
+        var heatmapImage: UIImage?
+        private var isShowingOverlay = false
+        var animationKeys: [String] = []
+
+        func stopAnimations() {
+            if let scene = scene,
+               let parent = scene.rootNode.childNode(withName: "artworkGroup", recursively: false) {
+                for key in animationKeys {
+                    parent.removeAction(forKey: key)
+                }
+            }
+            animationKeys.removeAll()
+        }
+
+        /// Switches the artwork diffuse texture between original and complexity heatmap.
+        func setComplexityOverlay(_ show: Bool) {
+            guard show != isShowingOverlay else { return }
+            isShowingOverlay = show
+
+            guard let material = artworkMaterial else { return }
+
+            if show, let heatmap = heatmapImage {
+                material.diffuse.contents = heatmap
+                material.normal.intensity = 0.0 // Disable normal map in overlay mode
+                material.lightingModel = .constant // Unlit for accurate heatmap colors
+            } else if let original = originalImage {
+                material.diffuse.contents = original
+                material.normal.intensity = 1.0
+                material.lightingModel = .physicallyBased
+            }
+        }
     }
 }

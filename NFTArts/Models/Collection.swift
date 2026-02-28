@@ -1,7 +1,7 @@
 import Foundation
 
 struct NFTCollection: Identifiable, Hashable {
-    let id: UUID
+    var id: UUID
     var name: String
     var description: String
     var artworkIds: [UUID]

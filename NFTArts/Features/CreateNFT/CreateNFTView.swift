@@ -141,7 +141,7 @@ struct CreateNFTView: View {
                         VStack(spacing: 4) {
                             Text(L10n.tapToSelect)
                                 .font(NFTTypography.headline)
-                            Text("PNG, JPG up to 50MB")
+                            Text(L10n.fileFormatInfo)
                                 .font(NFTTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -250,11 +250,11 @@ struct CreateNFTView: View {
                 Slider(value: $durationHours, in: 1...168, step: 1)
                     .tint(.nftPurple)
                 HStack {
-                    Text("1h")
+                    Text(L10n.oneHour)
                         .font(NFTTypography.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("7 days")
+                    Text(L10n.sevenDays)
                         .font(NFTTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -296,7 +296,7 @@ struct CreateNFTView: View {
                 summaryRow(L10n.category, value: L10n.categoryName(category))
                 summaryRow(L10n.blockchain, value: blockchain.rawValue)
                 summaryRow(L10n.startingPriceLabel, value: "\(startingPrice) ETH")
-                summaryRow("Duration", value: "\(Int(durationHours)) hours")
+                summaryRow(L10n.durationLabel, value: L10n.durationHoursValue(Int(durationHours)))
             }
             .padding()
             .nftCardStyle()

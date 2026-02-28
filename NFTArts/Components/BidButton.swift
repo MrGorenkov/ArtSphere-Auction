@@ -76,7 +76,7 @@ struct PlaceBidSheet: View {
                         Text(auction.artwork.artistName)
                             .font(NFTTypography.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("Current: \(auction.formattedCurrentBid)")
+                        Text(L10n.currentBidLabel + auction.formattedCurrentBid)
                             .font(NFTTypography.bid)
                             .foregroundStyle(.nftPurple)
                     }
@@ -114,7 +114,7 @@ struct PlaceBidSheet: View {
                                 .scaleEffect(0.8)
                         } else {
                             Button(action: { bidQueue.syncQueue() }) {
-                                Text("Sync")
+                                Text(L10n.syncBids)
                                     .font(NFTTypography.caption)
                                     .fontWeight(.semibold)
                                     .foregroundStyle(.nftPurple)
@@ -185,7 +185,7 @@ struct PlaceBidSheet: View {
                 Button(L10n.ok) { dismiss() }
             } message: {
                 if let bid = placedBid {
-                    Text("Your bid of \(bid.formattedAmount) has been placed on \"\(auction.artwork.title)\"")
+                    Text(L10n.bidConfirmation(bid.formattedAmount, auction.artwork.title))
                 }
             }
             .alert(L10n.bidFailed, isPresented: $showError) {

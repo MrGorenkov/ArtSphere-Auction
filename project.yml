@@ -31,3 +31,21 @@ targets:
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
     resources:
       - path: NFTArts/Resources/Assets.xcassets
+
+  NFTArtsAdmin:
+    type: application
+    platform: macOS
+    deploymentTarget:
+      macOS: "13.0"
+    sources:
+      - path: NFTArtsAdmin
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: NFTArtsAdmin/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.gorenkov.NFTArtsAdmin
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+    resources:
+      - path: NFTArtsAdmin/Resources/Assets.xcassets
+      - path: NFTArtsAdmin/Resources/AppIcon.icns

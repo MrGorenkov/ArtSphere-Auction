@@ -24,6 +24,12 @@ func routes(_ app: Application) throws {
     try protected.register(collection: CollectionController())
     try protected.register(collection: NFTTokenController())
     try protected.register(collection: TransactionController())
+    try protected.register(collection: InteractionController())
+    try protected.register(collection: MessageController())
+
+    // Admin routes (require JWT + admin flag)
+    let admin = protected.grouped(AdminMiddleware())
+    try admin.register(collection: AdminController())
 
     // ============================================
     // WebSocket: real-time аукционные обновления

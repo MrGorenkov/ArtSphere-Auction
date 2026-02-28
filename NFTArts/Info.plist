@@ -37,11 +37,13 @@
 	<string>NFT Arts needs camera access for AR viewing of artworks</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NFT Arts needs photo library access to upload artwork images</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>NFT Arts needs permission to save AR screenshots to your photo library</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>192.168.1.54</key>
+			<key>172.20.10.2</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>

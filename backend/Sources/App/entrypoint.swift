@@ -54,6 +54,11 @@ struct NFTArtsBackend {
         // Register routes
         try routes(app)
 
+        // Use PORT env var if set (Railway, Render, Heroku, etc.)
+        if let portString = Environment.get("PORT"), let port = Int(portString) {
+            app.http.server.configuration.port = port
+        }
+
         try await app.execute()
     }
 }

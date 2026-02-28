@@ -29,4 +29,4 @@ COPY --from=build /build/.build/release/App /app/App
 
 EXPOSE 8080
 
-CMD ["/bin/sh", "-c", "./App serve --env production --hostname 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["./App", "serve", "--env", "production", "--hostname", "0.0.0.0"]

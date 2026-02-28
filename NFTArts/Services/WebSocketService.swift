@@ -41,9 +41,9 @@ final class WebSocketService: ObservableObject {
 
     private var wsBaseURL: String {
         #if DEBUG
-        return "ws://172.20.10.2:8080"
+        return "wss://artsphere-auction-production.up.railway.app"
         #else
-        return "wss://api.nftarts.com"
+        return "wss://artsphere-auction-production.up.railway.app"
         #endif
     }
 

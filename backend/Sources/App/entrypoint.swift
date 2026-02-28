@@ -1,6 +1,7 @@
 import Vapor
 import Fluent
 import FluentPostgresDriver
+import NIOSSL
 
 @main
 struct NFTArtsBackend {
@@ -19,12 +20,16 @@ struct NFTArtsBackend {
             // Railway provides a single connection URL — parse manually for reliability
             let port = dbUrl.port ?? 5432
             let dbName = dbUrl.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            // Use TLS (required for Railway PostgreSQL external connections)
+            var tlsConfig = TLSConfiguration.makeClientConfiguration()
+            tlsConfig.certificateVerification = .none
             app.databases.use(.postgres(
                 hostname: host,
                 port: port,
                 username: user,
                 password: password,
-                database: dbName.isEmpty ? "railway" : dbName
+                database: dbName.isEmpty ? "railway" : dbName,
+                tlsConfiguration: tlsConfig
             ), as: .psql)
         } else {
             let dbHost = Environment.get("DATABASE_HOST") ?? "localhost"

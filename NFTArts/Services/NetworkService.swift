@@ -5,9 +5,9 @@ import Foundation
 enum APIConfig {
     static var baseURL: String {
         #if DEBUG
-        return "http://172.20.10.2:8080/api/v1"
+        return "https://artsphere-auction-production.up.railway.app/api/v1"
         #else
-        return "https://api.nftarts.com/api/v1"
+        return "https://artsphere-auction-production.up.railway.app/api/v1"
         #endif
     }
 

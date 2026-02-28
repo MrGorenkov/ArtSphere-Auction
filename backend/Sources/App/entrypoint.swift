@@ -11,9 +11,21 @@ struct NFTArtsBackend {
         let app = try await Application.make(env)
 
         // Configure database — supports both Railway DATABASE_URL and individual vars
-        if let dbUrl = Environment.get("DATABASE_URL") {
-            // Railway provides a single connection URL
-            try app.databases.use(.postgres(url: dbUrl), as: .psql)
+        if let dbUrlString = Environment.get("DATABASE_URL"),
+           let dbUrl = URL(string: dbUrlString),
+           let host = dbUrl.host,
+           let user = dbUrl.user,
+           let password = dbUrl.password {
+            // Railway provides a single connection URL — parse manually for reliability
+            let port = dbUrl.port ?? 5432
+            let dbName = dbUrl.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            app.databases.use(.postgres(
+                hostname: host,
+                port: port,
+                username: user,
+                password: password,
+                database: dbName.isEmpty ? "railway" : dbName
+            ), as: .psql)
         } else {
             let dbHost = Environment.get("DATABASE_HOST") ?? "localhost"
             let dbPort = Environment.get("DATABASE_PORT").flatMap(Int.init) ?? 5432

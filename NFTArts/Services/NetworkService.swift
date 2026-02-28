@@ -5,7 +5,7 @@ import Foundation
 enum APIConfig {
     static var baseURL: String {
         #if DEBUG
-        return "http://192.168.1.54:8080/api/v1"
+        return "http://172.20.10.2:8080/api/v1"
         #else
         return "https://api.nftarts.com/api/v1"
         #endif
@@ -15,6 +15,13 @@ enum APIConfig {
 }
 
 // MARK: - API Error
+
+/// Server error response structure
+private struct ServerErrorResponse: Codable {
+    let error: Bool?
+    let reason: String?
+    let message: String?
+}
 
 enum APIError: LocalizedError {
     case invalidURL
@@ -29,7 +36,9 @@ enum APIError: LocalizedError {
         case .invalidURL: return "Invalid URL"
         case .noData: return "No data received"
         case .decodingError(let error): return "Decoding error: \(error.localizedDescription)"
-        case .serverError(let code, let message): return "Server error \(code): \(message)"
+        case .serverError(let code, let message):
+            // For user-facing errors, just show the message without the code
+            return message
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .unauthorized: return "Unauthorized. Please log in again."
         }
@@ -203,7 +212,14 @@ final class NetworkService {
             case 401:
                 throw APIError.unauthorized
             default:
-                let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+                // Try to parse structured error response
+                let message: String
+                if let errorResponse = try? JSONDecoder().decode(ServerErrorResponse.self, from: data),
+                   let reason = errorResponse.reason ?? errorResponse.message {
+                    message = reason
+                } else {
+                    message = String(data: data, encoding: .utf8) ?? "Unknown error"
+                }
                 throw APIError.serverError(httpResponse.statusCode, message)
             }
         } catch let error as APIError {
@@ -334,7 +350,14 @@ final class NetworkService {
             case 401:
                 throw APIError.unauthorized
             default:
-                let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+                // Try to parse structured error response
+                let message: String
+                if let errorResponse = try? JSONDecoder().decode(ServerErrorResponse.self, from: data),
+                   let reason = errorResponse.reason ?? errorResponse.message {
+                    message = reason
+                } else {
+                    message = String(data: data, encoding: .utf8) ?? "Unknown error"
+                }
                 throw APIError.serverError(httpResponse.statusCode, message)
             }
         } catch let error as APIError {
@@ -451,6 +474,76 @@ struct APINotification: Codable, Identifiable {
     let message: String
     let isRead: Bool
     let createdAt: String
+}
+
+// MARK: - Messages
+
+struct APIMessage: Codable, Identifiable {
+    let id: String
+    let senderId: String
+    let senderName: String
+    let senderAvatarUrl: String?
+    let receiverId: String
+    let receiverName: String
+    let artworkId: String?
+    let artworkTitle: String?
+    let artworkImageUrl: String?
+    let text: String
+    let isRead: Bool
+    let createdAt: String
+}
+
+struct APIConversation: Codable, Identifiable {
+    var id: String { userId }
+    let userId: String
+    let userName: String
+    let avatarUrl: String?
+    let lastMessage: String
+    let lastMessageDate: String
+    let unreadCount: Int
+}
+
+struct APISendMessageRequest: Codable {
+    let receiverId: String
+    let artworkId: String?
+    let text: String
+}
+
+// MARK: - Interactions
+
+struct APICommentDTO: Codable, Identifiable {
+    let id: String
+    let artworkId: String
+    let userId: String
+    let userName: String
+    let avatarUrl: String?
+    let text: String
+    let createdAt: String
+}
+
+struct APILikeStatusDTO: Codable {
+    let artworkId: String
+    let likeCount: Int
+    let isLikedByMe: Bool
+}
+
+struct APIUserProfileDTO: Codable {
+    let id: String
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let bio: String?
+    let followersCount: Int
+    let followingCount: Int
+    let artworksCount: Int
+    let isFollowedByMe: Bool
+}
+
+struct APIFollowStatusDTO: Codable {
+    let userId: String
+    let followersCount: Int
+    let followingCount: Int
+    let isFollowedByMe: Bool
 }
 
 // MARK: - API Request DTOs
@@ -637,5 +730,63 @@ extension NetworkService {
     func mintNFT(artworkId: String) async throws -> APIArtwork {
         struct Body: Codable { let artworkId: String }
         return try await request(endpoint: "nft/mint", method: .post, body: Body(artworkId: artworkId))
+    }
+
+    // MARK: Messages
+
+    func fetchConversations() async throws -> [APIConversation] {
+        try await request(endpoint: "messages")
+    }
+
+    func fetchMessages(userId: String) async throws -> [APIMessage] {
+        try await request(endpoint: "messages/\(userId)")
+    }
+
+    func sendMessage(request body: APISendMessageRequest) async throws -> APIMessage {
+        try await request(endpoint: "messages", method: .post, body: body)
+    }
+
+    // MARK: Interactions
+
+    func fetchComments(artworkId: String) async throws -> [APICommentDTO] {
+        try await request(endpoint: "artworks/\(artworkId)/comments")
+    }
+
+    func addComment(artworkId: String, text: String) async throws -> APICommentDTO {
+        struct Body: Codable { let text: String }
+        return try await request(endpoint: "artworks/\(artworkId)/comments", method: .post, body: Body(text: text))
+    }
+
+    func deleteComment(commentId: String) async throws {
+        try await requestVoid(endpoint: "artworks/comments/\(commentId)", method: .delete)
+    }
+
+    func fetchLikeStatus(artworkId: String) async throws -> APILikeStatusDTO {
+        try await request(endpoint: "artworks/\(artworkId)/likes")
+    }
+
+    func toggleLike(artworkId: String) async throws -> APILikeStatusDTO {
+        try await request(endpoint: "artworks/\(artworkId)/like", method: .post)
+    }
+
+    func fetchUserProfile(userId: String) async throws -> APIUserProfileDTO {
+        try await request(endpoint: "users/\(userId)/profile")
+    }
+
+    func toggleFollow(userId: String) async throws -> APIFollowStatusDTO {
+        try await request(endpoint: "users/\(userId)/follow", method: .post)
+    }
+
+    func fetchFollowing() async throws -> [APIUser] {
+        try await request(endpoint: "users/me/following")
+    }
+
+    func fetchFollowers() async throws -> [APIUser] {
+        try await request(endpoint: "users/me/followers")
+    }
+
+    func searchUsers(query: String) async throws -> [APIUser] {
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        return try await request(endpoint: "users/search?q=\(encoded)")
     }
 }

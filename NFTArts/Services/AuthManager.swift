@@ -8,7 +8,10 @@ import SwiftUI
 final class AuthManager: ObservableObject {
     static let shared = AuthManager()
 
-    @Published var isAuthenticated = false
+    @Published private var _isAuthenticated = false
+    var isAuthenticated: Bool {
+        _isAuthenticated && currentUser != nil
+    }
     @Published var currentUser: APIUser?
     @Published var isLoading = false
     @Published var error: String?
@@ -17,9 +20,8 @@ final class AuthManager: ObservableObject {
     private let analytics = AnalyticsService.shared
 
     private init() {
-        // If a persisted token exists, mark as authenticated and fetch the profile.
+        // If a persisted token exists, fetch the profile (which will set authenticated state)
         if network.authToken != nil {
-            isAuthenticated = true
             Task { await loadProfile() }
         }
     }
@@ -43,7 +45,7 @@ final class AuthManager: ObservableObject {
 
             await MainActor.run {
                 currentUser = response.user
-                isAuthenticated = true
+                _isAuthenticated = true
                 isLoading = false
                 analytics.setUserId(response.user.id)
                 analytics.track(.login, parameters: ["wallet": walletAddress])
@@ -89,14 +91,34 @@ final class AuthManager: ObservableObject {
 
             await MainActor.run {
                 currentUser = response.user
-                isAuthenticated = true
+                _isAuthenticated = true
                 isLoading = false
                 analytics.setUserId(response.user.id)
                 analytics.track(.register, parameters: ["username": username])
             }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                // Provide user-friendly localized error messages
+                let errorMessage: String
+                let description = error.localizedDescription.lowercased()
+
+                if description.contains("username") && description.contains("already") {
+                    errorMessage = LanguageManager.shared.currentLanguage == .russian
+                        ? "Это имя пользователя уже занято"
+                        : "This username is already taken"
+                } else if description.contains("wallet") && description.contains("already") {
+                    errorMessage = LanguageManager.shared.currentLanguage == .russian
+                        ? "Этот адрес кошелька уже зарегистрирован"
+                        : "This wallet address is already registered"
+                } else if description.contains("username or wallet") && description.contains("already") {
+                    errorMessage = LanguageManager.shared.currentLanguage == .russian
+                        ? "Имя пользователя или адрес кошелька уже зарегистрированы"
+                        : "Username or wallet address is already registered"
+                } else {
+                    errorMessage = error.localizedDescription
+                }
+
+                self.error = errorMessage
                 isLoading = false
             }
         }
@@ -111,6 +133,7 @@ final class AuthManager: ObservableObject {
             let user: APIUser = try await network.request(endpoint: "users/me")
             await MainActor.run {
                 currentUser = user
+                _isAuthenticated = true
             }
         } catch {
             await MainActor.run {
@@ -152,7 +175,7 @@ final class AuthManager: ObservableObject {
     func logout() {
         analytics.track(.logout)
         network.setAuthToken(nil)
-        isAuthenticated = false
+        _isAuthenticated = false
         currentUser = nil
         error = nil
     }

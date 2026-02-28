@@ -74,7 +74,7 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: nftarts_minio
       MINIO_SECRET_KEY: minio_secret_key
-      MINIO_PUBLIC_URL: http://192.168.1.54:9000
+      MINIO_PUBLIC_URL: http://172.20.10.2:9000
     ports:
       - "8080:8080"
     depends_on:

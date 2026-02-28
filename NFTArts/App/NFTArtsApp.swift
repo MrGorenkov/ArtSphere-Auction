@@ -5,9 +5,9 @@ struct NFTArtsApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     @StateObject private var themeManager = ThemeManager()
-    @StateObject private var auctionService = AuctionService.shared
+    @ObservedObject private var auctionService = AuctionService.shared
     @StateObject private var languageManager = LanguageManager.shared
-    @StateObject private var authManager = AuthManager.shared
+    @ObservedObject private var authManager = AuthManager.shared
 
     var body: some Scene {
         WindowGroup {

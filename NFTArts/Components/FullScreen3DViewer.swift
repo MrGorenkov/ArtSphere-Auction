@@ -8,6 +8,8 @@ struct FullScreen3DViewer: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
     @State private var usdzScene: SCNScene?
+    @State private var showARShowroom = false
+    @State private var tempFileURL: URL?
 
     var body: some View {
         ZStack {
@@ -28,9 +30,27 @@ struct FullScreen3DViewer: View {
                     .tint(.white)
             }
 
-            // Close button
+            // Top bar: AR Showroom button + Close
             VStack {
                 HStack {
+                    if artwork.isARAvailable {
+                        Button {
+                            showARShowroom = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arkit")
+                                    .font(.system(size: 14))
+                                Text(L10n.arShowroom)
+                                    .font(NFTTypography.caption)
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                        }
+                    }
                     Spacer()
                     Button {
                         dismiss()
@@ -40,8 +60,8 @@ struct FullScreen3DViewer: View {
                             .foregroundStyle(.white.opacity(0.8))
                             .shadow(radius: 4)
                     }
-                    .padding(20)
                 }
+                .padding(20)
                 Spacer()
             }
 
@@ -77,6 +97,15 @@ struct FullScreen3DViewer: View {
             }
         }
         .onAppear { loadModel() }
+        .onDisappear {
+            if let tempURL = tempFileURL {
+                try? FileManager.default.removeItem(at: tempURL)
+            }
+        }
+        .fullScreenCover(isPresented: $showARShowroom) {
+            ARShowroomView(artwork: artwork)
+                .environmentObject(AuctionService.shared)
+        }
     }
 
     private func loadModel() {
@@ -91,6 +120,7 @@ struct FullScreen3DViewer: View {
 
                     let scene = try SCNScene(url: fileUrl)
                     await MainActor.run {
+                        self.tempFileURL = fileUrl
                         self.usdzScene = scene
                         self.isLoading = false
                     }
@@ -167,8 +197,8 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
 
         // Artwork surface
         let plane = SCNPlane(width: 2.0, height: 2.0)
-        plane.widthSegmentCount = 48
-        plane.heightSegmentCount = 48
+        plane.widthSegmentCount = 64
+        plane.heightSegmentCount = 64
         plane.cornerRadius = 0.05
 
         let material = SCNMaterial()
@@ -180,11 +210,15 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
         if let img = image {
             let normalMap = NormalMapGenerator.generate(from: img)
             material.normal.contents = normalMap
-            material.normal.intensity = 1.0
+            material.normal.intensity = 1.5
+            // Displacement mapping for physical brushstroke relief
+            let heightMap = NormalMapGenerator.generateHeightmap(from: img)
+            material.displacement.contents = heightMap
+            material.displacement.intensity = 0.015
         }
 
-        material.roughness.contents = NSNumber(value: 0.35)
-        material.metalness.contents = NSNumber(value: 0.05)
+        material.roughness.contents = NSNumber(value: 0.45)
+        material.metalness.contents = NSNumber(value: 0.03)
         material.isDoubleSided = true
 
         plane.materials = [material]
@@ -212,12 +246,15 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
         if artwork.imageSource == .uploaded, let data = artwork.localImageData {
             return UIImage(data: data)
         }
-        if artwork.imageSource == .url, let urlString = artwork.imageURL {
-            // Synchronous load for SceneKit texture
-            if let url = URL(string: urlString),
-               let data = try? Data(contentsOf: url) {
-                return UIImage(data: data)
-            }
+        if artwork.imageSource == .bundled, let img = UIImage(named: artwork.imageName) {
+            return img
+        }
+        if artwork.imageSource == .url,
+           let urlString = artwork.imageURL,
+           let url = URL(string: urlString),
+           let data = try? Data(contentsOf: url),
+           let img = UIImage(data: data) {
+            return img
         }
         return MockDataService.generateArtworkImage(
             for: artwork,

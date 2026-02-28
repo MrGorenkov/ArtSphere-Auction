@@ -10,17 +10,25 @@ struct ArtworkDetailView: View {
     @State private var showFullscreen3D = false
     @State private var isFavorited = false
     @State private var showAddToCollection = false
-    @State private var showShareSheet = false
+    @State private var showComplexityOverlay = false
+    @State private var likeCount = 0
+    @State private var isLikedByMe = false
+    @State private var isLikeLoading = false
+    @State private var comments: [APICommentDTO] = []
+    @State private var newComment = ""
+    @State private var showShareArtwork = false
 
     enum DetailTab: CaseIterable {
         case overview
         case bids
+        case comments
         case details
 
         var title: String {
             switch self {
             case .overview: return L10n.overview
             case .bids: return L10n.bids
+            case .comments: return L10n.comments
             case .details: return L10n.details
             }
         }
@@ -32,6 +40,7 @@ struct ArtworkDetailView: View {
                 artworkSection
                 VStack(spacing: 20) {
                     headerSection
+                    socialBar
                     auctionStatusBanner
                     bidSection
                     tabSection
@@ -44,6 +53,12 @@ struct ArtworkDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
+                    Button {
+                        showShareArtwork = true
+                    } label: {
+                        Image(systemName: "paperplane")
+                    }
+
                     Button {
                         showAddToCollection = true
                     } label: {
@@ -63,37 +78,21 @@ struct ArtworkDetailView: View {
         .onAppear {
             isFavorited = auctionService.isFavorited(auction.artwork.id)
             auctionService.fetchBidsForAuction(auction.id)
+            loadLikeStatus()
+            loadComments()
         }
         .sheet(isPresented: $showAddToCollection) {
             AddToCollectionSheet(artworkId: auction.artwork.id)
+        }
+        .sheet(isPresented: $showShareArtwork) {
+            ShareArtworkSheet(artwork: auction.artwork)
         }
         .fullScreenCover(isPresented: $showFullscreen3D) {
             FullScreen3DViewer(artwork: auction.artwork)
         }
         .fullScreenCover(isPresented: $showARViewer) {
-            ARViewerRepresentable(artwork: auction.artwork)
-                .ignoresSafeArea()
-                .overlay(alignment: .topTrailing) {
-                    Button {
-                        showARViewer = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundStyle(.white)
-                            .shadow(radius: 4)
-                    }
-                    .padding(20)
-                }
-                .overlay(alignment: .bottom) {
-                    Text(L10n.tapToPlace)
-                        .font(NFTTypography.subheadline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .padding(.bottom, 40)
-                }
+            ARShowroomView(artwork: auction.artwork)
+                .environmentObject(auctionService)
         }
     }
 
@@ -102,7 +101,7 @@ struct ArtworkDetailView: View {
     private var artworkSection: some View {
         ZStack(alignment: .bottomTrailing) {
             if show3DView {
-                Artwork3DView(artwork: auction.artwork)
+                Artwork3DView(artwork: auction.artwork, showComplexityOverlay: showComplexityOverlay)
                     .frame(height: 400)
                     .transition(.opacity)
             } else {
@@ -112,21 +111,22 @@ struct ArtworkDetailView: View {
             }
 
             HStack(spacing: 8) {
+                // 3D toggle button
                 Button {
-                    if show3DView {
-                        // Already in 3D — open fullscreen viewer
-                        AnalyticsService.shared.track3D(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
-                        showFullscreen3D = true
-                    } else {
-                        withAnimation(.spring(response: 0.4)) {
+                    withAnimation(.spring(response: 0.4)) {
+                        if show3DView {
+                            show3DView = false
+                            showComplexityOverlay = false
+                        } else {
+                            AnalyticsService.shared.track3D(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
                             show3DView = true
                         }
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: show3DView ? "rotate.3d" : "cube.fill")
+                        Image(systemName: show3DView ? "photo" : "cube.fill")
                             .font(.system(size: 14))
-                        Text(show3DView ? L10n.view3DModel : "3D")
+                        Text(show3DView ? "2D" : "3D")
                             .font(NFTTypography.caption)
                             .fontWeight(.semibold)
                     }
@@ -138,26 +138,28 @@ struct ArtworkDetailView: View {
                 }
 
                 if show3DView {
+                    // Heatmap toggle
                     Button {
                         withAnimation(.spring(response: 0.4)) {
-                            show3DView = false
+                            showComplexityOverlay.toggle()
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "photo")
+                            Image(systemName: showComplexityOverlay ? "waveform.path" : "waveform.path.ecg")
                                 .font(.system(size: 14))
-                            Text("2D")
+                            Text(showComplexityOverlay ? L10n.original : L10n.heatmap)
                                 .font(NFTTypography.caption)
                                 .fontWeight(.semibold)
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
+                        .background(showComplexityOverlay ? AnyShapeStyle(Color.red.opacity(0.6)) : AnyShapeStyle(.ultraThinMaterial))
                         .clipShape(Capsule())
                     }
                 }
 
+                // AR button
                 Button {
                     AnalyticsService.shared.trackAR(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
                     showARViewer = true
@@ -180,6 +182,52 @@ struct ArtworkDetailView: View {
         }
     }
 
+    // MARK: - Social Bar (Like + Comment count + Share)
+
+    private var socialBar: some View {
+        HStack(spacing: 20) {
+            // Like button
+            Button {
+                toggleLike()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isLikedByMe ? "heart.fill" : "heart")
+                        .foregroundStyle(isLikedByMe ? .red : .secondary)
+                        .font(.system(size: 18))
+                    Text("\(likeCount)")
+                        .font(NFTTypography.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(isLikeLoading)
+
+            // Comment count
+            Button {
+                withAnimation { selectedTab = .comments }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.right")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 18))
+                    Text("\(comments.count)")
+                        .font(NFTTypography.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Share button
+            Button {
+                showShareArtwork = true
+            } label: {
+                Image(systemName: "paperplane")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 18))
+            }
+
+            Spacer()
+        }
+    }
+
     // MARK: - Header
 
     private var headerSection: some View {
@@ -189,12 +237,24 @@ struct ArtworkDetailView: View {
                     Text(auction.artwork.title)
                         .font(NFTTypography.title)
 
-                    HStack(spacing: 8) {
-                        Image(systemName: "person.circle.fill")
-                            .foregroundStyle(.nftPurple)
-                        Text(auction.artwork.artistName)
-                            .font(NFTTypography.callout)
-                            .foregroundStyle(.secondary)
+                    if let creatorId = auction.creatorId {
+                        NavigationLink(destination: UserProfileView(userId: creatorId, userName: auction.artwork.artistName, avatarUrl: nil)) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "person.circle.fill")
+                                    .foregroundStyle(.nftPurple)
+                                Text(auction.artwork.artistName)
+                                    .font(NFTTypography.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.circle.fill")
+                                .foregroundStyle(.nftPurple)
+                            Text(auction.artwork.artistName)
+                                .font(NFTTypography.callout)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -347,6 +407,8 @@ struct ArtworkDetailView: View {
             overviewContent
         case .bids:
             bidsContent
+        case .comments:
+            commentsContent
         case .details:
             detailsContent
         }
@@ -385,44 +447,104 @@ struct ArtworkDetailView: View {
                 .padding(.bottom, 4)
 
                 ForEach(auction.bids.sorted(by: { $0.timestamp > $1.timestamp })) { bid in
-                    HStack {
-                        // Highlight user's own bids
-                        Circle()
-                            .fill(bid.userId == auctionService.currentUser.id ? Color.nftPurple : Color(.tertiarySystemFill))
-                            .frame(width: 32, height: 32)
-                            .overlay {
-                                Text(String(bid.userName.prefix(1)))
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(bid.userId == auctionService.currentUser.id ? .white : .primary)
+                    NavigationLink(destination: UserProfileView(userId: bid.userId, userName: bid.userName, avatarUrl: nil)) {
+                        HStack {
+                            Circle()
+                                .fill(bid.userId == auctionService.currentUser.id ? Color.nftPurple : Color(.tertiarySystemFill))
+                                .frame(width: 32, height: 32)
+                                .overlay {
+                                    Text(String(bid.userName.prefix(1)))
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(bid.userId == auctionService.currentUser.id ? .white : .primary)
+                                }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(bid.userName)
+                                        .font(NFTTypography.subheadline)
+                                        .fontWeight(.medium)
+                                    if bid.userId == auctionService.currentUser.id {
+                                        Text(L10n.you)
+                                            .font(NFTTypography.caption)
+                                            .foregroundStyle(.nftPurple)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 1)
+                                            .background(Color.nftPurple.opacity(0.1))
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                Text(bid.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                    .font(NFTTypography.caption)
+                                    .foregroundStyle(.secondary)
                             }
 
-                        VStack(alignment: .leading, spacing: 2) {
+                            Spacer()
+
+                            Text(bid.formattedAmount)
+                                .font(NFTTypography.bid)
+                                .foregroundStyle(.nftPurple)
+                        }
+                    }
+                    .tint(.primary)
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+    }
+
+    // MARK: - Comments Content
+
+    private var commentsContent: some View {
+        VStack(spacing: 12) {
+            // Add comment input
+            HStack(spacing: 10) {
+                TextField(L10n.addComment, text: $newComment)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.tertiarySystemBackground))
+                    .clipShape(Capsule())
+
+                Button {
+                    submitComment()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.nftPurple)
+                }
+                .disabled(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if comments.isEmpty {
+                Text(L10n.noComments)
+                    .font(NFTTypography.body)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 30)
+            } else {
+                ForEach(comments) { comment in
+                    HStack(alignment: .top, spacing: 10) {
+                        AvatarView(avatarUrl: comment.avatarUrl, displayName: comment.userName, size: 32)
+
+                        VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Text(bid.userName)
+                                Text(comment.userName)
                                     .font(NFTTypography.subheadline)
-                                    .fontWeight(.medium)
-                                if bid.userId == auctionService.currentUser.id {
-                                    Text(L10n.you)
-                                        .font(NFTTypography.caption)
-                                        .foregroundStyle(.nftPurple)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 1)
-                                        .background(Color.nftPurple.opacity(0.1))
-                                        .clipShape(Capsule())
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                if let date = ISO8601DateFormatter().date(from: comment.createdAt) {
+                                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            Text(bid.timestamp.formatted(date: .abbreviated, time: .shortened))
-                                .font(NFTTypography.caption)
-                                .foregroundStyle(.secondary)
+                            Text(comment.text)
+                                .font(NFTTypography.body)
+                                .foregroundStyle(.primary)
                         }
-
-                        Spacer()
-
-                        Text(bid.formattedAmount)
-                            .font(NFTTypography.bid)
-                            .foregroundStyle(.nftPurple)
                     }
-                    .padding(12)
+                    .padding(10)
                     .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
@@ -440,6 +562,61 @@ struct ArtworkDetailView: View {
             InfoRow(icon: "clock.badge.checkmark.fill", title: L10n.ends, value: auction.endTime.formatted(date: .abbreviated, time: .shortened))
             InfoRow(icon: "number", title: L10n.totalBids, value: "\(auction.bidCount)")
             InfoRow(icon: "arrow.up.right", title: L10n.minNextBid, value: String(format: "%.2f ETH", auction.minimumNextBid))
+            if let score = auction.artwork.textureComplexityScore {
+                InfoRow(icon: "waveform.path.ecg", title: L10n.textureComplexity, value: String(format: "%.0f%%", score * 100))
+            }
+        }
+    }
+
+    // MARK: - Like / Comment Actions
+
+    private func loadLikeStatus() {
+        Task {
+            do {
+                let status = try await NetworkService.shared.fetchLikeStatus(artworkId: auction.artwork.id.uuidString)
+                await MainActor.run {
+                    likeCount = status.likeCount
+                    isLikedByMe = status.isLikedByMe
+                }
+            } catch {}
+        }
+    }
+
+    private func toggleLike() {
+        isLikeLoading = true
+        Task {
+            do {
+                let status = try await NetworkService.shared.toggleLike(artworkId: auction.artwork.id.uuidString)
+                await MainActor.run {
+                    likeCount = status.likeCount
+                    isLikedByMe = status.isLikedByMe
+                    isLikeLoading = false
+                }
+            } catch {
+                await MainActor.run { isLikeLoading = false }
+            }
+        }
+    }
+
+    private func loadComments() {
+        Task {
+            do {
+                let result = try await NetworkService.shared.fetchComments(artworkId: auction.artwork.id.uuidString)
+                await MainActor.run { comments = result }
+            } catch {}
+        }
+    }
+
+    private func submitComment() {
+        let text = newComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        newComment = ""
+
+        Task {
+            do {
+                let comment = try await NetworkService.shared.addComment(artworkId: auction.artwork.id.uuidString, text: text)
+                await MainActor.run { comments.insert(comment, at: 0) }
+            } catch {}
         }
     }
 }

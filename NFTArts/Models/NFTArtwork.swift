@@ -21,6 +21,9 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
     var imageURL: String?
     var modelUrl: String?
 
+    // Texture analysis
+    var textureComplexityScore: Double?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -35,7 +38,8 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         imageSource: ImageSource = .procedural,
         localImageData: Data? = nil,
         imageURL: String? = nil,
-        modelUrl: String? = nil
+        modelUrl: String? = nil,
+        textureComplexityScore: Double? = nil
     ) {
         self.id = id
         self.title = title
@@ -51,6 +55,7 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         self.localImageData = localImageData
         self.imageURL = imageURL
         self.modelUrl = modelUrl
+        self.textureComplexityScore = textureComplexityScore
     }
 
     enum ImageSource: String, Codable, Hashable {
@@ -79,6 +84,16 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
             case .pixel: return "square.grid.3x3.fill"
             case .threeD: return "cube.fill"
             }
+        }
+    }
+
+    /// Whether this artwork can be viewed in AR (has a 3D model or can generate one from image).
+    var isARAvailable: Bool {
+        if modelUrl != nil { return true }
+        switch imageSource {
+        case .uploaded: return localImageData != nil
+        case .url: return imageURL != nil
+        case .procedural, .bundled: return true
         }
     }
 

@@ -157,7 +157,8 @@ struct ProfileView: View {
             AvatarView(
                 avatarUrl: auctionService.currentUser.avatarUrl,
                 displayName: auctionService.currentUser.displayName,
-                size: 60
+                size: 60,
+                isCurrentUser: true
             )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -191,6 +192,7 @@ struct AvatarView: View {
     let avatarUrl: String?
     let displayName: String
     let size: CGFloat
+    var isCurrentUser: Bool = false
 
     @State private var image: UIImage?
 
@@ -220,13 +222,13 @@ struct AvatarView: View {
     }
 
     private func loadAvatar() {
-        // Try local avatar first (saved from device camera/gallery)
-        if let localImage = AuctionService.loadLocalAvatarImage() {
+        // Only load local avatar for the current user
+        if isCurrentUser, let localImage = AuctionService.loadLocalAvatarImage() {
             withAnimation(.easeIn(duration: 0.3)) { self.image = localImage }
             return
         }
 
-        // Fall back to URL (from server/MinIO)
+        // Load from URL (from server/MinIO)
         guard let urlString = avatarUrl, let url = URL(string: urlString) else { return }
         Task {
             do {
@@ -289,7 +291,8 @@ struct EditProfileSheet: View {
                                 AvatarView(
                                     avatarUrl: auctionService.currentUser.avatarUrl,
                                     displayName: auctionService.currentUser.displayName,
-                                    size: 80
+                                    size: 80,
+                                    isCurrentUser: true
                                 )
                             }
                             Button(L10n.changeAvatar) {

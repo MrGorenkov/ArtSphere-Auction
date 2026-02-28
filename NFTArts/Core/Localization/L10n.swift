@@ -95,6 +95,12 @@ enum L10n {
     static var yourBid: String { isRu ? "Ваша ставка" : "Your Bid" }
     static var minimumBid: String { isRu ? "Минимальная ставка" : "Minimum bid" }
     static var noBidsYet: String { isRu ? "Ставок пока нет" : "No bids yet" }
+    static var auctionNotFound: String { isRu ? "Аукцион не найден" : "Auction not found" }
+    static var auctionNoLongerActive: String { isRu ? "Аукцион больше не активен" : "Auction is no longer active" }
+    static func bidMinimumError(_ amount: String) -> String {
+        isRu ? "Ставка должна быть не менее \(amount) ETH" : "Bid must be at least \(amount) ETH"
+    }
+    static var insufficientBalance: String { isRu ? "Недостаточно средств" : "Insufficient balance" }
     static var bids: String { isRu ? "Ставки" : "Bids" }
     static var active: String { isRu ? "Активный" : "Active" }
     static var upcoming: String { isRu ? "Скоро" : "Upcoming" }
@@ -203,9 +209,17 @@ enum L10n {
     static var selectArtwork: String { isRu ? "Выбрать произведение" : "Select Artwork" }
     static var launchAR: String { isRu ? "Запустить AR" : "Launch AR" }
     static var changeArtwork: String { isRu ? "Изменить произведение" : "Change Artwork" }
-    static var tapToPlace: String { isRu ? "Нажмите на поверхность для размещения" : "Tap on a surface to place artwork" }
+    static var tapToPlace: String { isRu ? "Нажмите на стену или пол для размещения" : "Tap on a wall or floor to place artwork" }
     static var rotateToInspect: String { isRu ? "Вращайте для осмотра" : "Rotate to inspect" }
     static var view3DModel: String { isRu ? "3D Модель" : "3D Model" }
+    static var arShowroom: String { isRu ? "AR Шоурум" : "AR Showroom" }
+    static var pinchToScale: String { isRu ? "Масштабируйте и вращайте жестами" : "Pinch to scale, rotate to turn" }
+    static var tapWallOrFloor: String { isRu ? "Нажмите на стену или пол" : "Tap wall or floor to place" }
+    static var placedOnWall: String { isRu ? "Размещено на стене" : "Placed on wall" }
+    static var placedOnFloor: String { isRu ? "Размещено на полу" : "Placed on floor" }
+    static var heatmap: String { isRu ? "Карта" : "Heatmap" }
+    static var original: String { isRu ? "Оригинал" : "Original" }
+    static var textureComplexity: String { isRu ? "Сложность текстуры" : "Texture Complexity" }
 
     // MARK: - Profile
     static var profileTitle: String { isRu ? "Профиль" : "Profile" }
@@ -253,8 +267,93 @@ enum L10n {
     static var profileUpdated: String { isRu ? "Профиль обновлён" : "Profile Updated" }
     static var account: String { isRu ? "Аккаунт" : "Account" }
 
+    // MARK: - BidButton / PlaceBidSheet
+    static var currentBidLabel: String { isRu ? "Текущая: " : "Current: " }
+    static var syncBids: String { isRu ? "Синхр." : "Sync" }
+    static func bidConfirmation(_ amount: String, _ title: String) -> String {
+        isRu ? "Ваша ставка \(amount) на \"\(title)\" размещена" : "Your bid of \(amount) has been placed on \"\(title)\""
+    }
+
+    // MARK: - CreateNFT
+    static var fileFormatInfo: String { isRu ? "PNG, JPG до 50 МБ" : "PNG, JPG up to 50MB" }
+    static var durationLabel: String { isRu ? "Длительность" : "Duration" }
+    static func durationHoursValue(_ hours: Int) -> String {
+        isRu ? "\(hours) ч." : "\(hours) hours"
+    }
+    static var oneHour: String { isRu ? "1 ч" : "1h" }
+    static var sevenDays: String { isRu ? "7 дней" : "7 days" }
+
+    // MARK: - AR (extended)
+    static var arNotSupported: String { isRu ? "AR не поддерживается на этом устройстве" : "AR not supported on this device" }
+    static var arGalleryAdd: String { isRu ? "Добавить" : "Add" }
+    static var arClearAll: String { isRu ? "Очистить" : "Clear" }
+    static var arTakePhoto: String { isRu ? "Фото" : "Photo" }
+    static var arPhotoSaved: String { isRu ? "Сохранено в Фото" : "Saved to Photos" }
+    static var arPhotoNoPermission: String { isRu ? "Нет доступа к Фото" : "No Photos access" }
+    static var arDimensions: String { isRu ? "см" : "cm" }
+    static var arWallMode: String { isRu ? "Стена" : "Wall" }
+    static var arFloorMode: String { isRu ? "Пол" : "Floor" }
+    static var arObjectSelected: String { isRu ? "Объект выбран" : "Object selected" }
+
+    // MARK: - Notifications (AuctionService)
+    static func auctionWonNotif(_ title: String, _ amount: String) -> String {
+        isRu ? "Вы выиграли \"\(title)\" за \(amount)!" : "You won \"\(title)\" for \(amount)!"
+    }
+    static func auctionEndedSold(_ title: String, _ winner: String) -> String {
+        isRu ? "\"\(title)\" продано пользователю \(winner)" : "\"\(title)\" was sold to \(winner)"
+    }
+    static func auctionEndedNoBids(_ title: String) -> String {
+        isRu ? "\"\(title)\" — ставок не было" : "\"\(title)\" received no bids"
+    }
+    static func newBidNotif(_ user: String, _ amount: String, _ title: String) -> String {
+        isRu ? "\(user) поставил \(amount) на \"\(title)\"" : "\(user) bid \(amount) on \"\(title)\""
+    }
+    static func bidPlacedNotif(_ amount: String, _ title: String) -> String {
+        isRu ? "Ваша ставка \(amount) на \"\(title)\"" : "You bid \(amount) on \"\(title)\""
+    }
+    static func bidQueuedNotif(_ amount: String) -> String {
+        isRu ? "Ставка \(amount) — синхронизируется при подключении" : "You bid \(amount) — will sync when online"
+    }
+    static func nftCreatedNotif(_ title: String) -> String {
+        isRu ? "Ваше произведение \"\(title)\" выставлено!" : "Your artwork \"\(title)\" is now live!"
+    }
+    static var auctionEndedTitle: String { isRu ? "Аукцион завершён" : "Auction Ended" }
+    static var nftCreatedTitle: String { isRu ? "NFT создан!" : "NFT Created!" }
+
+    // MARK: - User Profile
+    static var userArtworks: String { isRu ? "Произведения" : "Artworks" }
+    static var auctionActivity: String { isRu ? "Аукционная активность" : "Auction Activity" }
+    static var noRecentActivity: String { isRu ? "Нет недавней активности" : "No recent activity" }
+    static var exportMetrics: String { isRu ? "Экспорт метрик" : "Export Metrics" }
+    static var metricsCopied: String { isRu ? "Метрики скопированы" : "Metrics copied to clipboard" }
+
     // MARK: - Theme names
     static var themeSystem: String { isRu ? "Системная" : "System" }
     static var themeLight: String { isRu ? "Светлая" : "Light" }
     static var themeDark: String { isRu ? "Тёмная" : "Dark" }
+
+    // MARK: - Messages
+    static var messages: String { isRu ? "Сообщения" : "Messages" }
+    static var noMessages: String { isRu ? "Нет сообщений" : "No messages yet" }
+    static var typeMessage: String { isRu ? "Написать сообщение..." : "Type a message..." }
+    static var send: String { isRu ? "Отправить" : "Send" }
+    static var shareArtwork: String { isRu ? "Поделиться" : "Share" }
+    static var sharedArtwork: String { isRu ? "Поделился произведением" : "Shared an artwork" }
+    static var selectUser: String { isRu ? "Выбрать пользователя" : "Select User" }
+    static var sendTo: String { isRu ? "Отправить" : "Send to" }
+    static var artworkShared: String { isRu ? "Произведение отправлено!" : "Artwork shared!" }
+    static var newConversation: String { isRu ? "Новый диалог" : "New Conversation" }
+    static var searchUsers: String { isRu ? "Поиск пользователей..." : "Search users..." }
+    static var noSearchResults: String { isRu ? "Ничего не найдено" : "No results found" }
+
+    // MARK: - Social Interactions
+    static var comments: String { isRu ? "Комментарии" : "Comments" }
+    static var noComments: String { isRu ? "Пока нет комментариев" : "No comments yet" }
+    static var addComment: String { isRu ? "Добавить комментарий..." : "Add a comment..." }
+    static var likes: String { isRu ? "Нравится" : "Likes" }
+    static var follow: String { isRu ? "Подписаться" : "Follow" }
+    static var unfollow: String { isRu ? "Отписаться" : "Unfollow" }
+    static var followers: String { isRu ? "Подписчики" : "Followers" }
+    static var following: String { isRu ? "Подписки" : "Following" }
+    static var deleteComment: String { isRu ? "Удалить комментарий" : "Delete comment" }
 }

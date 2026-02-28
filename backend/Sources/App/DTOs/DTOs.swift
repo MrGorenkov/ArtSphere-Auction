@@ -228,3 +228,76 @@ struct APIResponse<T: Content>: Content {
         self.message = message
     }
 }
+
+// MARK: - Comments, Likes, Follows DTOs
+
+struct CommentDTO: Content {
+    let id: String
+    let artworkId: String
+    let userId: String
+    let userName: String
+    let avatarUrl: String?
+    let text: String
+    let createdAt: String
+}
+
+struct CreateCommentRequest: Content {
+    let text: String
+}
+
+struct LikeStatusDTO: Content {
+    let artworkId: String
+    let likeCount: Int
+    let isLikedByMe: Bool
+}
+
+struct FollowStatusDTO: Content {
+    let userId: String
+    let followersCount: Int
+    let followingCount: Int
+    let isFollowedByMe: Bool
+}
+
+struct UserProfileDTO: Content {
+    let id: String
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let bio: String?
+    let followersCount: Int
+    let followingCount: Int
+    let artworksCount: Int
+    let isFollowedByMe: Bool
+}
+
+// MARK: - Messages
+
+struct MessageDTO: Content {
+    let id: String
+    let senderId: String
+    let senderName: String
+    let senderAvatarUrl: String?
+    let receiverId: String
+    let receiverName: String
+    let artworkId: String?
+    let artworkTitle: String?
+    let artworkImageUrl: String?
+    let text: String
+    let isRead: Bool
+    let createdAt: String
+}
+
+struct SendMessageRequest: Content {
+    let receiverId: String
+    let artworkId: String?
+    let text: String
+}
+
+struct ConversationDTO: Content {
+    let userId: String
+    let userName: String
+    let avatarUrl: String?
+    let lastMessage: String
+    let lastMessageDate: String
+    let unreadCount: Int
+}

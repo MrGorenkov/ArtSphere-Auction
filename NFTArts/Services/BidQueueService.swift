@@ -29,6 +29,7 @@ final class BidQueueService: ObservableObject {
     private let network = NetworkService.shared
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "com.nftarts.bidqueue.monitor")
+    private let syncDispatchQueue = DispatchQueue(label: "com.nftarts.bidqueue.sync")
     private var wasDisconnected = false
 
     // Exponential backoff
@@ -106,59 +107,64 @@ final class BidQueueService: ObservableObject {
     // MARK: - Sync with Exponential Backoff
 
     func syncQueue() {
-        guard !pendingBids.isEmpty, !isSyncing else { return }
-        guard network.authToken != nil else { return }
+        syncDispatchQueue.async { [weak self] in
+            guard let self else { return }
+            guard !self.pendingBids.isEmpty, !self.isSyncing else { return }
+            guard self.network.authToken != nil else { return }
 
-        isSyncing = true
+            Task { @MainActor in
+                self.isSyncing = true
+            }
 
-        let bidsToSync = pendingBids
+            let bidsToSync = self.pendingBids
 
-        struct SyncInput: Codable {
-            let id: String
-            let auctionId: String
-            let amount: Double
-            let timestamp: String
-        }
+            struct SyncInput: Codable {
+                let id: String
+                let auctionId: String
+                let amount: Double
+                let timestamp: String
+            }
 
-        let formatter = ISO8601DateFormatter()
-        let inputs = bidsToSync.map { bid in
-            SyncInput(
-                id: bid.id.uuidString,
-                auctionId: bid.auctionId.uuidString,
-                amount: bid.amount,
-                timestamp: formatter.string(from: bid.timestamp)
-            )
-        }
-
-        Task {
-            do {
-                let response: SyncBidResponse = try await network.request(
-                    endpoint: "sync/bids",
-                    method: .post,
-                    body: inputs
+            let formatter = ISO8601DateFormatter()
+            let inputs = bidsToSync.map { bid in
+                SyncInput(
+                    id: bid.id.uuidString,
+                    auctionId: bid.auctionId.uuidString,
+                    amount: bid.amount,
+                    timestamp: formatter.string(from: bid.timestamp)
                 )
+            }
 
-                let syncedIds = Set(response.synced)
-                let failedIds = Set(response.failed)
-                let processedIds = syncedIds.union(failedIds)
+            Task {
+                do {
+                    let response: SyncBidResponse = try await self.network.request(
+                        endpoint: "sync/bids",
+                        method: .post,
+                        body: inputs
+                    )
 
-                await MainActor.run {
-                    self.pendingBids.removeAll { processedIds.contains($0.id.uuidString) }
-                    self.saveQueue()
-                    self.isSyncing = false
-                    self.retryAttempt = 0  // Reset on success
-                }
+                    let syncedIds = Set(response.synced)
+                    let failedIds = Set(response.failed)
+                    let processedIds = syncedIds.union(failedIds)
 
-                if !syncedIds.isEmpty {
-                    print("[BidQueue] Synced \(syncedIds.count) bids")
+                    await MainActor.run {
+                        self.pendingBids.removeAll { processedIds.contains($0.id.uuidString) }
+                        self.saveQueue()
+                        self.isSyncing = false
+                        self.retryAttempt = 0
+                    }
+
+                    if !syncedIds.isEmpty {
+                        print("[BidQueue] Synced \(syncedIds.count) bids")
+                    }
+                    if !failedIds.isEmpty {
+                        print("[BidQueue] \(failedIds.count) bids failed validation (removed)")
+                    }
+                } catch {
+                    print("[BidQueue] Sync failed (attempt \(self.retryAttempt + 1)): \(error)")
+                    await MainActor.run { self.isSyncing = false }
+                    self.scheduleRetry()
                 }
-                if !failedIds.isEmpty {
-                    print("[BidQueue] \(failedIds.count) bids failed validation (removed)")
-                }
-            } catch {
-                print("[BidQueue] Sync failed (attempt \(retryAttempt + 1)): \(error)")
-                await MainActor.run { self.isSyncing = false }
-                scheduleRetry()
             }
         }
     }

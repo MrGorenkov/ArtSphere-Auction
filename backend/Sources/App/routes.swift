@@ -1,9 +1,12 @@
 import Vapor
 
 func routes(_ app: Application) throws {
-    // Health check
+    // Health check (root + /health for Railway)
     app.get { req in
         return ["status": "ok", "service": "NFT Arts API", "version": "1.0"]
+    }
+    app.get("health") { req in
+        return ["status": "ok"]
     }
 
     // API v1

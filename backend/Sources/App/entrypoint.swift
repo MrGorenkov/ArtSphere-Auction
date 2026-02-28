@@ -10,18 +10,22 @@ struct NFTArtsBackend {
 
         let app = try await Application.make(env)
 
-        // Configure database
-        let dbHost = Environment.get("DATABASE_HOST") ?? "localhost"
-        let dbPort = Environment.get("DATABASE_PORT").flatMap(Int.init) ?? 5432
-        let dbUser = Environment.get("DATABASE_USERNAME") ?? "nftarts"
-        let dbPass = Environment.get("DATABASE_PASSWORD") ?? "nftarts_secret"
-        let dbName = Environment.get("DATABASE_NAME") ?? "nftarts_db"
-        let dbConfig: DatabaseConfigurationFactory = .postgres(
-            hostname: dbHost, port: dbPort,
-            username: dbUser, password: dbPass,
-            database: dbName
-        )
-        app.databases.use(dbConfig, as: .psql)
+        // Configure database — supports both Railway DATABASE_URL and individual vars
+        if let dbUrl = Environment.get("DATABASE_URL") {
+            // Railway provides a single connection URL
+            try app.databases.use(.postgres(url: dbUrl), as: .psql)
+        } else {
+            let dbHost = Environment.get("DATABASE_HOST") ?? "localhost"
+            let dbPort = Environment.get("DATABASE_PORT").flatMap(Int.init) ?? 5432
+            let dbUser = Environment.get("DATABASE_USERNAME") ?? "nftarts"
+            let dbPass = Environment.get("DATABASE_PASSWORD") ?? "nftarts_secret"
+            let dbName = Environment.get("DATABASE_NAME") ?? "nftarts_db"
+            app.databases.use(.postgres(
+                hostname: dbHost, port: dbPort,
+                username: dbUser, password: dbPass,
+                database: dbName
+            ), as: .psql)
+        }
 
         // Configure JWT
         let jwtSecret = Environment.get("JWT_SECRET") ?? "dev-secret-key"

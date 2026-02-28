@@ -19,6 +19,7 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y \
     libcurl4 \
     libxml2 \
+    libssl3 \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
 

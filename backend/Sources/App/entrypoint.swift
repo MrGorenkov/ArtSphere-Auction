@@ -29,7 +29,8 @@ struct NFTArtsBackend {
                 username: user,
                 password: password,
                 database: dbName.isEmpty ? "railway" : dbName,
-                tlsConfiguration: tlsConfig
+                tlsConfiguration: tlsConfig,
+                maxConnectionsPerEventLoop: 2
             ), as: .psql)
         } else {
             let dbHost = Environment.get("DATABASE_HOST") ?? "localhost"

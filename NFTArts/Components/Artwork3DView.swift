@@ -52,28 +52,13 @@ struct Artwork3DView: UIViewRepresentable {
         }
         let scene = SCNScene()
 
-        // Resolve the image to use
-        let sourceImage: UIImage
-        if let img = artworkImage {
-            sourceImage = img
-        } else if artwork.imageSource == .uploaded,
-                  let data = artwork.localImageData,
-                  let img = UIImage(data: data) {
-            sourceImage = img
-        } else if artwork.imageSource == .bundled,
-                  let img = UIImage(named: artwork.imageName) {
-            sourceImage = img
-        } else if artwork.imageSource == .url,
-                  let urlString = artwork.imageURL,
-                  let url = URL(string: urlString),
-                  let data = try? Data(contentsOf: url),
-                  let img = UIImage(data: data) {
-            sourceImage = img
-        } else {
-            sourceImage = MockDataService.generateArtworkImage(for: artwork, size: CGSize(width: 512, height: 512))
-        }
+        // Resolve the image — synchronous (cached/bundled/local) or placeholder.
+        // URL-based artworks render with the procedural placeholder first; the real image
+        // is fetched on a background queue below and swapped in via the coordinator.
+        let sourceImage = artworkImage ?? ImageLoader.cachedOrPlaceholder(for: artwork)
 
-        let normalMap = NormalMapGenerator.generate(from: sourceImage)
+        let cacheKey = artwork.id.uuidString
+        let normalMap = NormalMapGenerator.generate(from: sourceImage, cacheKey: cacheKey)
 
         // Calculate and record texture complexity metric for scientific analysis
         if let complexity = NormalMapGenerator.calculateTextureMetric(from: sourceImage) {
@@ -86,7 +71,7 @@ struct Artwork3DView: UIViewRepresentable {
 
         // Store images in coordinator for overlay toggling
         coordinator.originalImage = sourceImage
-        coordinator.heatmapImage = NormalMapGenerator.generateComplexityHeatmap(from: sourceImage)
+        coordinator.heatmapImage = NormalMapGenerator.generateComplexityHeatmap(from: sourceImage, cacheKey: cacheKey)
 
         // Parent node for grouped animation
         let parentNode = SCNNode()
@@ -108,7 +93,7 @@ struct Artwork3DView: UIViewRepresentable {
         material.lightingModel = .physicallyBased
         material.isDoubleSided = true
         // Displacement mapping for physical brushstroke relief
-        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage)
+        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage, cacheKey: cacheKey)
         material.displacement.contents = heightMap
         material.displacement.intensity = 0.015
         planeGeometry.materials = [material]
@@ -119,6 +104,28 @@ struct Artwork3DView: UIViewRepresentable {
 
         // Store reference for material switching
         coordinator.artworkMaterial = material
+
+        // For URL-sourced artworks the placeholder may be a procedural fallback.
+        // Upgrade to the real bytes in the background; swap on the main thread.
+        if artworkImage == nil && artwork.imageSource == .url {
+            let artId = artwork.id
+            let snapshot = artwork
+            Task.detached(priority: .userInitiated) {
+                let loaded = await ImageLoader.loadImage(for: snapshot)
+                // Drop placeholder-derived maps so the next generate* runs against `loaded`.
+                NormalMapGenerator.invalidate(cacheKey: artId.uuidString)
+                let newNormal = NormalMapGenerator.generate(from: loaded, cacheKey: artId.uuidString)
+                let newHeight = NormalMapGenerator.generateHeightmap(from: loaded, cacheKey: artId.uuidString)
+                let newHeatmap = NormalMapGenerator.generateComplexityHeatmap(from: loaded, cacheKey: artId.uuidString)
+                await MainActor.run {
+                    coordinator.originalImage = loaded
+                    coordinator.heatmapImage = newHeatmap
+                    material.diffuse.contents = loaded
+                    material.normal.contents = newNormal
+                    material.displacement.contents = newHeight
+                }
+            }
+        }
 
         // Frame (4 separate bars for realistic look)
         let frameThickness: CGFloat = 0.08

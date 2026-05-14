@@ -14,6 +14,7 @@ struct Auction: Identifiable, Hashable {
     var creatorId: UUID?
     var bidStep: Double?
     var serverBidCount: Int?
+    var buyNowPrice: Double?
 
     var timeRemaining: TimeInterval {
         max(endTime.timeIntervalSince(Date()), 0)
@@ -49,6 +50,16 @@ struct Auction: Identifiable, Hashable {
     var isReserveMet: Bool {
         guard let reserve = reservePrice else { return true }
         return currentBid >= reserve
+    }
+
+    var hasBuyNow: Bool {
+        guard let price = buyNowPrice else { return false }
+        return price > currentBid && isActive
+    }
+
+    var formattedBuyNowPrice: String? {
+        guard let price = buyNowPrice else { return nil }
+        return String(format: "%.2f ETH", price)
     }
 
     enum AuctionStatus: String, Codable {

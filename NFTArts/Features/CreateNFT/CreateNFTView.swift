@@ -12,6 +12,7 @@ struct CreateNFTView: View {
     @State private var description = ""
     @State private var category: NFTArtwork.ArtworkCategory = .digitalPainting
     @State private var startingPrice = ""
+    @State private var buyNowPrice = ""
     @State private var durationHours: Double = 24
     @State private var blockchain: NFTArtwork.BlockchainNetwork = .polygon
 
@@ -242,6 +243,24 @@ struct CreateNFTView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
+            // Buy Now Price (optional)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L10n.buyNowOptional)
+                    .font(NFTTypography.subheadline)
+                    .fontWeight(.medium)
+                HStack {
+                    TextField("—", text: $buyNowPrice)
+                        .textFieldStyle(.plain)
+                        .keyboardType(.decimalPad)
+                    Text("ETH")
+                        .font(NFTTypography.headline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
             // Duration
             VStack(alignment: .leading, spacing: 6) {
                 Text(L10n.auctionDuration(Int(durationHours)))
@@ -296,6 +315,9 @@ struct CreateNFTView: View {
                 summaryRow(L10n.category, value: L10n.categoryName(category))
                 summaryRow(L10n.blockchain, value: blockchain.rawValue)
                 summaryRow(L10n.startingPriceLabel, value: "\(startingPrice) ETH")
+                if !buyNowPrice.isEmpty, let _ = Double(buyNowPrice) {
+                    summaryRow(L10n.buyNowPrice, value: "\(buyNowPrice) ETH")
+                }
                 summaryRow(L10n.durationLabel, value: L10n.durationHoursValue(Int(durationHours)))
             }
             .padding()
@@ -407,20 +429,15 @@ struct CreateNFTView: View {
                         startingPrice: price,
                         reservePrice: nil,
                         bidStep: max(price * 0.05, 0.01),
-                        durationHours: Int(durationHours)
+                        durationHours: Int(durationHours),
+                        buyNowPrice: Double(buyNowPrice)
                     )
                     _ = try await network.createAuction(request: auctionReq)
 
-                    // 4. Also add locally so it appears immediately
+                    // 4. Reload from API so the server version appears (correct UUID + image URL)
+                    await auctionService.loadFromAPI()
+
                     await MainActor.run {
-                        _ = auctionService.createNFTFromImage(
-                            image: image,
-                            title: title,
-                            description: description,
-                            category: category,
-                            startingPrice: price,
-                            durationHours: durationHours
-                        )
                         isProcessing = false
                         showSuccess = true
                     }
@@ -433,7 +450,9 @@ struct CreateNFTView: View {
                             description: description,
                             category: category,
                             startingPrice: price,
-                            durationHours: durationHours
+                            durationHours: durationHours,
+                            blockchain: blockchain,
+                            buyNowPrice: Double(buyNowPrice)
                         )
                         isProcessing = false
                         showSuccess = true
@@ -448,7 +467,9 @@ struct CreateNFTView: View {
                     description: description,
                     category: category,
                     startingPrice: price,
-                    durationHours: durationHours
+                    durationHours: durationHours,
+                    blockchain: blockchain,
+                    buyNowPrice: Double(buyNowPrice)
                 )
                 isProcessing = false
                 showSuccess = true

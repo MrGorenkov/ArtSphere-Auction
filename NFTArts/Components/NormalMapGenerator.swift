@@ -2,10 +2,56 @@ import UIKit
 import Accelerate
 
 enum NormalMapGenerator {
+
+    // MARK: - Cache
+
+    /// Caches per-artwork derived images. Keyed by stable identifier (e.g., artwork id).
+    /// Cleared automatically by the system on memory pressure.
+    private enum Cache {
+        static let normalMap: NSCache<NSString, UIImage> = {
+            let c = NSCache<NSString, UIImage>()
+            c.countLimit = 64
+            return c
+        }()
+        static let heightmap: NSCache<NSString, UIImage> = {
+            let c = NSCache<NSString, UIImage>()
+            c.countLimit = 64
+            return c
+        }()
+        static let heatmap: NSCache<NSString, UIImage> = {
+            let c = NSCache<NSString, UIImage>()
+            c.countLimit = 64
+            return c
+        }()
+
+        static func key(_ raw: String, suffix: String) -> NSString {
+            "\(raw)#\(suffix)" as NSString
+        }
+    }
+
+    /// Drops every cached map (normal/height/heatmap) for the given artwork id. Call this
+    /// when the source image is replaced (e.g., URL artwork loaded after placeholder) so
+    /// the next `generate*` call rebuilds from the new bytes instead of returning the
+    /// placeholder-derived map.
+    static func invalidate(cacheKey: String) {
+        let suffixes = ["normal_3.5", "heightmap", "heatmap"]
+        for suffix in suffixes {
+            let key = Cache.key(cacheKey, suffix: suffix)
+            Cache.normalMap.removeObject(forKey: key)
+            Cache.heightmap.removeObject(forKey: key)
+            Cache.heatmap.removeObject(forKey: key)
+        }
+    }
+
     /// Generates a normal map from a 2D image using Sobel filter for edge detection.
     /// The image is converted to grayscale as a height map, then gradients
     /// are calculated to produce normal vectors encoded as RGB.
-    static func generate(from image: UIImage, strength: Float = 3.5) -> UIImage {
+    /// Pass `cacheKey` (e.g., artwork id) to avoid recomputing on repeat opens.
+    static func generate(from image: UIImage, strength: Float = 3.5, cacheKey: String? = nil) -> UIImage {
+        if let raw = cacheKey,
+           let cached = Cache.normalMap.object(forKey: Cache.key(raw, suffix: "normal_\(strength)")) {
+            return cached
+        }
         let start = CFAbsoluteTimeGetCurrent()
         defer {
             let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
@@ -114,6 +160,9 @@ enum NormalMapGenerator {
 
         let result = UIImage(cgImage: normalCGImage)
         normalData.deallocate()
+        if let raw = cacheKey {
+            Cache.normalMap.setObject(result, forKey: Cache.key(raw, suffix: "normal_\(strength)"))
+        }
         return result
     }
 
@@ -175,7 +224,11 @@ enum NormalMapGenerator {
 
     /// Generates a heatmap image from gradient magnitudes (blue→yellow→red).
     /// Used to visualize texture complexity per-pixel.
-    static func generateComplexityHeatmap(from image: UIImage) -> UIImage? {
+    static func generateComplexityHeatmap(from image: UIImage, cacheKey: String? = nil) -> UIImage? {
+        if let raw = cacheKey,
+           let cached = Cache.heatmap.object(forKey: Cache.key(raw, suffix: "heatmap")) {
+            return cached
+        }
         guard let cgImage = image.cgImage else { return nil }
 
         let width = cgImage.width
@@ -272,6 +325,9 @@ enum NormalMapGenerator {
 
         let result = UIImage(cgImage: heatmapCGImage)
         heatmapData.deallocate()
+        if let raw = cacheKey {
+            Cache.heatmap.setObject(result, forKey: Cache.key(raw, suffix: "heatmap"))
+        }
         return result
     }
 
@@ -336,7 +392,11 @@ enum NormalMapGenerator {
     // MARK: - Heightmap for Displacement
 
     /// Generates a grayscale heightmap from an image for displacement mapping in SceneKit.
-    static func generateHeightmap(from image: UIImage) -> UIImage {
+    static func generateHeightmap(from image: UIImage, cacheKey: String? = nil) -> UIImage {
+        if let raw = cacheKey,
+           let cached = Cache.heightmap.object(forKey: Cache.key(raw, suffix: "height")) {
+            return cached
+        }
         let start = CFAbsoluteTimeGetCurrent()
         defer {
             let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
@@ -368,6 +428,9 @@ enum NormalMapGenerator {
         }
         let result = UIImage(cgImage: cgResult)
         data.deallocate()
+        if let raw = cacheKey {
+            Cache.heightmap.setObject(result, forKey: Cache.key(raw, suffix: "height"))
+        }
         return result
     }
 }

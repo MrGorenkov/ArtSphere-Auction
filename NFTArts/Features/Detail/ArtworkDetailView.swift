@@ -6,7 +6,6 @@ struct ArtworkDetailView: View {
     @EnvironmentObject var lang: LanguageManager
     @State private var selectedTab: DetailTab = .overview
     @State private var show3DView = false
-    @State private var showARViewer = false
     @State private var showFullscreen3D = false
     @State private var isFavorited = false
     @State private var showAddToCollection = false
@@ -17,6 +16,9 @@ struct ArtworkDetailView: View {
     @State private var comments: [APICommentDTO] = []
     @State private var newComment = ""
     @State private var showShareArtwork = false
+    @State private var showBuyNowConfirm = false
+    @State private var showBuyNowSuccess = false
+    @State private var showAutoBrokerSheet = false
 
     enum DetailTab: CaseIterable {
         case overview
@@ -90,9 +92,22 @@ struct ArtworkDetailView: View {
         .fullScreenCover(isPresented: $showFullscreen3D) {
             FullScreen3DViewer(artwork: auction.artwork)
         }
-        .fullScreenCover(isPresented: $showARViewer) {
-            ARShowroomView(artwork: auction.artwork)
-                .environmentObject(auctionService)
+        .alert(L10n.buyNowConfirm, isPresented: $showBuyNowConfirm) {
+            Button(L10n.buyNow) {
+                let result = auctionService.buyNow(auctionId: auction.id)
+                if case .success = result {
+                    showBuyNowSuccess = true
+                }
+            }
+            Button(L10n.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.buyNowConfirmMessage(auction.artwork.title, auction.formattedBuyNowPrice ?? ""))
+        }
+        .alert(L10n.buyNowSuccess, isPresented: $showBuyNowSuccess) {
+            Button(L10n.ok) {}
+        }
+        .sheet(isPresented: $showAutoBrokerSheet) {
+            AutoBrokerSheet(auction: auction)
         }
     }
 
@@ -159,24 +174,6 @@ struct ArtworkDetailView: View {
                     }
                 }
 
-                // AR button
-                Button {
-                    AnalyticsService.shared.trackAR(artworkId: auction.artwork.id.uuidString, artworkTitle: auction.artwork.title)
-                    showARViewer = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arkit")
-                            .font(.system(size: 14))
-                        Text("AR")
-                            .font(NFTTypography.caption)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                }
             }
             .padding(16)
         }
@@ -333,36 +330,97 @@ struct ArtworkDetailView: View {
     // MARK: - Bid Section
 
     private var bidSection: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(auction.hasEnded ? L10n.finalPrice : L10n.currentBid)
-                    .font(NFTTypography.caption)
-                    .foregroundStyle(.secondary)
-                Text(auction.formattedCurrentBid)
-                    .font(NFTTypography.price)
-                    .foregroundStyle(.nftPurple)
-            }
-
-            Divider()
-                .frame(height: 40)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(auction.hasEnded ? L10n.ended : L10n.endsIn)
-                    .font(NFTTypography.caption)
-                    .foregroundStyle(.secondary)
-                if auction.hasEnded {
-                    Text(L10n.closed)
-                        .font(NFTTypography.timer)
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(auction.hasEnded ? L10n.finalPrice : L10n.currentBid)
+                        .font(NFTTypography.caption)
                         .foregroundStyle(.secondary)
-                } else {
-                    CountdownTimerView(endTime: auction.endTime)
+                    Text(auction.formattedCurrentBid)
+                        .font(NFTTypography.price)
+                        .foregroundStyle(.nftPurple)
+                }
+
+                Divider()
+                    .frame(height: 40)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(auction.hasEnded ? L10n.ended : L10n.endsIn)
+                        .font(NFTTypography.caption)
+                        .foregroundStyle(.secondary)
+                    if auction.hasEnded {
+                        Text(L10n.closed)
+                            .font(NFTTypography.timer)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        CountdownTimerView(endTime: auction.endTime)
+                    }
+                }
+
+                Spacer()
+
+                if !auction.hasEnded {
+                    BidButton(auction: auction)
                 }
             }
 
-            Spacer()
+            // Buy Now button
+            if auction.hasBuyNow, let price = auction.formattedBuyNowPrice {
+                Button {
+                    showBuyNowConfirm = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 14))
+                        Text("\(L10n.buyNow) — \(price)")
+                            .font(NFTTypography.subheadline)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(LinearGradient(colors: [.nftOrange, .nftOrange.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
 
+            // Auto-broker indicator
             if !auction.hasEnded {
-                BidButton(auction: auction)
+                if auctionService.isAutoBrokerActive(for: auction.id) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bolt.circle.fill")
+                            .foregroundStyle(.nftGreen)
+                        Text(L10n.autoBrokerActive)
+                            .font(NFTTypography.caption)
+                            .foregroundStyle(.nftGreen)
+                        if let max = auctionService.autoBrokerSettings[auctionService.currentUser.id]?[auction.id] {
+                            Text(String(format: "— %.2f ETH", max))
+                                .font(NFTTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(L10n.autoBrokerDisable) {
+                            auctionService.removeAutoBroker(auctionId: auction.id)
+                        }
+                        .font(NFTTypography.caption)
+                        .foregroundStyle(.red)
+                    }
+                    .padding(10)
+                    .background(Color.nftGreen.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                } else {
+                    Button {
+                        showAutoBrokerSheet = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bolt.circle")
+                                .font(.system(size: 14))
+                            Text(L10n.autoBrokerEnable)
+                                .font(NFTTypography.caption)
+                        }
+                        .foregroundStyle(.nftPurple)
+                    }
+                }
             }
         }
         .padding(16)
@@ -380,9 +438,11 @@ struct ArtworkDetailView: View {
                     }
                 } label: {
                     Text(tab.title)
-                        .font(NFTTypography.subheadline)
+                        .font(NFTTypography.caption)
                         .fontWeight(selectedTab == tab ? .semibold : .regular)
                         .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(
@@ -558,6 +618,9 @@ struct ArtworkDetailView: View {
             if let reserve = auction.reservePrice {
                 InfoRow(icon: "lock.fill", title: L10n.reservePrice, value: String(format: "%.2f ETH", reserve))
             }
+            if let buyNow = auction.buyNowPrice {
+                InfoRow(icon: "bolt.fill", title: L10n.buyNowPrice, value: String(format: "%.2f ETH", buyNow))
+            }
             InfoRow(icon: "clock.fill", title: L10n.started, value: auction.startTime.formatted(date: .abbreviated, time: .shortened))
             InfoRow(icon: "clock.badge.checkmark.fill", title: L10n.ends, value: auction.endTime.formatted(date: .abbreviated, time: .shortened))
             InfoRow(icon: "number", title: L10n.totalBids, value: "\(auction.bidCount)")
@@ -646,6 +709,100 @@ struct InfoRow: View {
                 .fontWeight(.medium)
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Auto-Broker Sheet
+
+struct AutoBrokerSheet: View {
+    let auction: Auction
+    @EnvironmentObject var auctionService: AuctionService
+    @Environment(\.dismiss) private var dismiss
+    @State private var maxAmount = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Info
+                HStack(spacing: 16) {
+                    ArtworkImageView(artwork: auction.artwork)
+                        .frame(width: 60, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(auction.artwork.title)
+                            .font(NFTTypography.headline)
+                        Text(L10n.currentBidLabel + auction.formattedCurrentBid)
+                            .font(NFTTypography.subheadline)
+                            .foregroundStyle(.nftPurple)
+                    }
+                    Spacer()
+                }
+                .padding()
+                .nftCardStyle()
+
+                // Explanation
+                HStack(spacing: 10) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(.nftPurple)
+                    Text(L10n.autoBrokerDescription)
+                        .font(NFTTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                // Max amount input
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.autoBrokerMaxAmount)
+                        .font(NFTTypography.headline)
+
+                    HStack {
+                        TextField(String(format: "%.2f", auction.minimumNextBid * 2), text: $maxAmount)
+                            .font(NFTTypography.price)
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.plain)
+
+                        Text("ETH")
+                            .font(NFTTypography.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    Text(L10n.minimumBid + ": \(String(format: "%.2f ETH", auction.minimumNextBid))")
+                        .font(NFTTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    guard let amount = Double(maxAmount), amount >= auction.minimumNextBid else { return }
+                    auctionService.setAutoBroker(auctionId: auction.id, maxAmount: amount)
+                    dismiss()
+                } label: {
+                    Text(L10n.autoBrokerEnable)
+                        .font(NFTTypography.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(LinearGradient.nftPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .disabled(maxAmount.isEmpty || (Double(maxAmount) ?? 0) < auction.minimumNextBid)
+            }
+            .padding()
+            .navigationTitle(L10n.autoBrokerTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.cancel) { dismiss() }
+                }
+            }
+        }
     }
 }
 

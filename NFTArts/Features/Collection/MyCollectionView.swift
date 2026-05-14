@@ -7,6 +7,7 @@ struct MyCollectionView: View {
     @State private var selectedCollection: NFTCollection?
     @State private var showCreateCollection = false
     @State private var showEditCollection = false
+    @State private var showShowroom = false
 
     private let columns2 = [
         GridItem(.flexible(), spacing: 12),
@@ -40,6 +41,13 @@ struct MyCollectionView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
                         Button {
+                            showShowroom = true
+                        } label: {
+                            Image(systemName: "cube.transparent")
+                        }
+                        .disabled(showroomArtworks.isEmpty)
+
+                        Button {
                             showCreateCollection = true
                         } label: {
                             Image(systemName: "folder.badge.plus")
@@ -66,6 +74,26 @@ struct MyCollectionView: View {
                     )
                 }
             }
+            .fullScreenCover(isPresented: $showShowroom) {
+                ShowroomView(
+                    artworks: showroomArtworks,
+                    collectionName: selectedCollection?.name ?? L10n.allArtworks,
+                    collectionId: selectedCollection?.id
+                )
+            }
+        }
+    }
+
+    /// Artworks to render in the showroom: either the selected collection or every owned piece.
+    private var showroomArtworks: [NFTArtwork] {
+        let ids: [UUID]
+        if let collection = selectedCollection {
+            ids = collection.artworkIds
+        } else {
+            ids = auctionService.currentUser.ownedArtworks
+        }
+        return ids.compactMap { id in
+            auctionService.auctions.first(where: { $0.artwork.id == id })?.artwork
         }
     }
 
@@ -139,12 +167,22 @@ struct MyCollectionView: View {
                 }
                 Spacer()
                 if !collection.isDefault {
-                    Button {
-                        showEditCollection = true
-                    } label: {
-                        Image(systemName: "pencil.circle")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.nftPurple)
+                    HStack(spacing: 12) {
+                        Button {
+                            showEditCollection = true
+                        } label: {
+                            Image(systemName: "pencil.circle")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.nftPurple)
+                        }
+                        Button {
+                            auctionService.deleteCollection(id: collection.id)
+                            selectedCollection = nil
+                        } label: {
+                            Image(systemName: "trash.circle")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.red)
+                        }
                     }
                 }
             }
@@ -157,7 +195,7 @@ struct MyCollectionView: View {
             if artworks.isEmpty {
                 emptyCollectionState
             } else {
-                artworkGrid(auctions: artworks)
+                artworkGridWithRemove(auctions: artworks, collectionId: collection.id)
             }
         }
     }
@@ -189,6 +227,27 @@ struct MyCollectionView: View {
                     CollectionItem(auction: auction, isWide: gridColumns == 1)
                 }
                 .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private func artworkGridWithRemove(auctions: [Auction], collectionId: UUID) -> some View {
+        LazyVGrid(columns: gridColumns == 2 ? columns2 : columns1, spacing: 12) {
+            ForEach(auctions) { auction in
+                NavigationLink {
+                    ArtworkDetailView(auction: auction)
+                } label: {
+                    CollectionItem(auction: auction, isWide: gridColumns == 1)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button(role: .destructive) {
+                        auctionService.removeFromCollection(collectionId: collectionId, artworkId: auction.artwork.id)
+                    } label: {
+                        Label(L10n.removeFromCollection, systemImage: "minus.circle")
+                    }
+                }
             }
         }
         .padding(.horizontal)

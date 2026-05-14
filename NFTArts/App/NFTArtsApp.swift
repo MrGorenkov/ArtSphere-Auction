@@ -8,17 +8,19 @@ struct NFTArtsApp: App {
     @ObservedObject private var auctionService = AuctionService.shared
     @StateObject private var languageManager = LanguageManager.shared
     @ObservedObject private var authManager = AuthManager.shared
+    @State private var showOnboarding: Bool = !OnboardingView.hasSeenOnboarding
 
     var body: some Scene {
         WindowGroup {
             Group {
                 if authManager.isAuthenticated {
                     MainTabView()
+                        .id(authManager.currentUser?.id ?? "none")
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .scale(scale: 0.95)),
                             removal: .opacity
                         ))
-                        .task {
+                        .task(id: authManager.currentUser?.id) {
                             await auctionService.loadFromAPI()
                         }
                         .onAppear {
@@ -40,6 +42,11 @@ struct NFTArtsApp: App {
             .environmentObject(authManager)
             .applyTheme(themeManager.selectedTheme)
             .id(languageManager.currentLanguage)
+            .fullScreenCover(isPresented: $showOnboarding) {
+                OnboardingView(isPresented: $showOnboarding)
+                    .applyTheme(themeManager.selectedTheme)
+                    .id(languageManager.currentLanguage)
+            }
         }
     }
 }

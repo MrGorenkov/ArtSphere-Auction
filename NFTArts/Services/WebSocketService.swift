@@ -40,10 +40,10 @@ final class WebSocketService: ObservableObject {
     // MARK: - Base URL
 
     private var wsBaseURL: String {
-        #if DEBUG
-        return "wss://artsphere-auction-production.up.railway.app"
+        #if targetEnvironment(simulator)
+        return "ws://localhost:8080"
         #else
-        return "wss://artsphere-auction-production.up.railway.app"
+        return "ws://192.168.1.67:8080"
         #endif
     }
 

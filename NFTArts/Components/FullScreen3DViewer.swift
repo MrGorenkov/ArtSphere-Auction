@@ -8,7 +8,6 @@ struct FullScreen3DViewer: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
     @State private var usdzScene: SCNScene?
-    @State private var showARShowroom = false
     @State private var tempFileURL: URL?
 
     var body: some View {
@@ -30,27 +29,9 @@ struct FullScreen3DViewer: View {
                     .tint(.white)
             }
 
-            // Top bar: AR Showroom button + Close
+            // Top bar: Close
             VStack {
                 HStack {
-                    if artwork.isARAvailable {
-                        Button {
-                            showARShowroom = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arkit")
-                                    .font(.system(size: 14))
-                                Text(L10n.arShowroom)
-                                    .font(NFTTypography.caption)
-                                    .fontWeight(.semibold)
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
-                        }
-                    }
                     Spacer()
                     Button {
                         dismiss()
@@ -102,10 +83,6 @@ struct FullScreen3DViewer: View {
                 try? FileManager.default.removeItem(at: tempURL)
             }
         }
-        .fullScreenCover(isPresented: $showARShowroom) {
-            ARShowroomView(artwork: artwork)
-                .environmentObject(AuctionService.shared)
-        }
     }
 
     private func loadModel() {
@@ -153,6 +130,11 @@ private struct SceneKitViewer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SCNView, context: Context) {}
+
+    static func dismantleUIView(_ uiView: SCNView, coordinator: ()) {
+        uiView.scene = nil
+        uiView.pointOfView = nil
+    }
 }
 
 // MARK: - Interactive Artwork 3D View (orbit camera, no auto-rotate)
@@ -192,6 +174,18 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
 
     func updateUIView(_ uiView: SCNView, context: Context) {}
 
+    static func dismantleUIView(_ uiView: SCNView, coordinator: ()) {
+        uiView.scene?.rootNode.enumerateChildNodes { node, _ in
+            node.geometry?.materials.forEach { material in
+                material.diffuse.contents = nil
+                material.normal.contents = nil
+                material.displacement.contents = nil
+            }
+        }
+        uiView.scene = nil
+        uiView.pointOfView = nil
+    }
+
     private func createArtworkNode() -> SCNNode {
         let parentNode = SCNNode()
 
@@ -208,11 +202,12 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
         material.diffuse.contents = image
 
         if let img = image {
-            let normalMap = NormalMapGenerator.generate(from: img)
+            let cacheKey = artwork.id.uuidString
+            let normalMap = NormalMapGenerator.generate(from: img, cacheKey: cacheKey)
             material.normal.contents = normalMap
             material.normal.intensity = 1.5
             // Displacement mapping for physical brushstroke relief
-            let heightMap = NormalMapGenerator.generateHeightmap(from: img)
+            let heightMap = NormalMapGenerator.generateHeightmap(from: img, cacheKey: cacheKey)
             material.displacement.contents = heightMap
             material.displacement.intensity = 0.015
         }
@@ -224,6 +219,23 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
         plane.materials = [material]
         let artworkPlane = SCNNode(geometry: plane)
         parentNode.addChildNode(artworkPlane)
+
+        // Async upgrade for URL-sourced artworks (placeholder is in `image` for now).
+        if artwork.imageSource == .url {
+            let snapshot = artwork
+            let cacheKey = artwork.id.uuidString
+            Task.detached(priority: .userInitiated) {
+                let loaded = await ImageLoader.loadImage(for: snapshot)
+                NormalMapGenerator.invalidate(cacheKey: cacheKey)
+                let n = NormalMapGenerator.generate(from: loaded, cacheKey: cacheKey)
+                let h = NormalMapGenerator.generateHeightmap(from: loaded, cacheKey: cacheKey)
+                await MainActor.run {
+                    material.diffuse.contents = loaded
+                    material.normal.contents = n
+                    material.displacement.contents = h
+                }
+            }
+        }
 
         // Frame
         addFrame(to: parentNode, width: 2.0, height: 2.0)
@@ -242,24 +254,11 @@ struct InteractiveArtwork3DView: UIViewRepresentable {
         return parentNode
     }
 
+    /// Returns whatever's available immediately (cache, bundled, local) or a procedural
+    /// placeholder. URL-sourced artworks are upgraded to the real bytes asynchronously
+    /// in the calling site after the scene is built.
     private func loadArtworkImage() -> UIImage? {
-        if artwork.imageSource == .uploaded, let data = artwork.localImageData {
-            return UIImage(data: data)
-        }
-        if artwork.imageSource == .bundled, let img = UIImage(named: artwork.imageName) {
-            return img
-        }
-        if artwork.imageSource == .url,
-           let urlString = artwork.imageURL,
-           let url = URL(string: urlString),
-           let data = try? Data(contentsOf: url),
-           let img = UIImage(data: data) {
-            return img
-        }
-        return MockDataService.generateArtworkImage(
-            for: artwork,
-            size: CGSize(width: 512, height: 512)
-        )
+        ImageLoader.cachedOrPlaceholder(for: artwork)
     }
 
     private func addFrame(to parent: SCNNode, width: CGFloat, height: CGFloat) {

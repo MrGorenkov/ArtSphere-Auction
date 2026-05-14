@@ -47,7 +47,6 @@ enum L10n {
     static var tabFeed: String { isRu ? "Лента" : "Feed" }
     static var tabExplore: String { isRu ? "Поиск" : "Explore" }
     static var tabCreate: String { isRu ? "Создать" : "Create" }
-    static var tabAR: String { isRu ? "AR Просмотр" : "AR View" }
     static var tabCollection: String { isRu ? "Коллекция" : "Collection" }
     static var tabProfile: String { isRu ? "Профиль" : "Profile" }
 
@@ -140,6 +139,7 @@ enum L10n {
     static var noBidsPlaced: String { isRu ? "Ставок не было" : "No bids were placed" }
     static var reserveNotMet: String { isRu ? "Резерв не достигнут" : "Not met" }
     static var addToCollection: String { isRu ? "Добавить в коллекцию" : "Add to Collection" }
+    static var removeFromCollection: String { isRu ? "Убрать из коллекции" : "Remove from Collection" }
 
     // MARK: - Explore
     static var exploreTitle: String { isRu ? "Поиск" : "Explore" }
@@ -185,6 +185,52 @@ enum L10n {
     static var noArtworksYet: String { isRu ? "Пока нет произведений" : "No Artworks Yet" }
     static var winOrCreateToStart: String { isRu ? "Выиграйте аукцион или создайте NFT,\nчтобы начать коллекцию" : "Win auctions or create your own NFTs\nto start your collection" }
     static var collectionEmpty: String { isRu ? "Эта коллекция пуста" : "This collection is empty" }
+
+    // MARK: - Showroom
+    static var showroom: String { isRu ? "Шоурум" : "Showroom" }
+    static var openShowroom: String { isRu ? "Открыть шоурум" : "Open Showroom" }
+    static var showroomEmptyHint: String { isRu ? "Добавьте хотя бы одно произведение, чтобы открыть шоурум" : "Add at least one artwork to open the showroom" }
+    static var showroomHintDrag: String { isRu ? "Перетаскивание — поворот" : "Drag to rotate" }
+    static var showroomHintPinch: String { isRu ? "Щипок — масштаб" : "Pinch to zoom" }
+    static var showroomHintWalk: String { isRu ? "Перетаскивание — обзор, щипок — шаг" : "Drag to look, pinch to step" }
+    static var showroomHintTap: String { isRu ? "Нажмите на картину" : "Tap a painting" }
+    static var showroomHintLongPress: String { isRu ? "Долгое нажатие — закрепить позицию" : "Long-press to pin position" }
+    static var showroomLayoutSaved: String { isRu ? "Расстановка сохранена" : "Layout saved" }
+    static var showroomResetLayout: String { isRu ? "Сбросить расстановку" : "Reset layout" }
+    static var showroomArrangePaintings: String { isRu ? "Расставить картины" : "Arrange paintings" }
+    static var showroomArrangeDone: String { isRu ? "Готово" : "Done" }
+    static var showroomArrangeHint1: String { isRu ? "Выберите первую картину" : "Pick the first painting" }
+    static var showroomArrangeHint2: String { isRu ? "Теперь выберите вторую — они поменяются местами" : "Now pick the second — they will swap" }
+    static var showroomCameraOrbit: String { isRu ? "Обзор" : "Orbit" }
+    static var showroomCameraWalk: String { isRu ? "Прогулка" : "Walk" }
+
+    // MARK: - Featured / Sort / Filter
+    static var featuredBadge: String { isRu ? "ХИТ" : "FEATURED" }
+    static var sortBy: String { isRu ? "Сортировка" : "Sort by" }
+    static var sortRecent: String { isRu ? "Сначала новые" : "Most recent" }
+    static var sortHighestBid: String { isRu ? "По ставке (макс.)" : "Highest bid" }
+    static var sortMostBids: String { isRu ? "Больше ставок" : "Most bids" }
+    static var sortEndingSoon: String { isRu ? "Скоро закончатся" : "Ending soon" }
+    static var filterStatus: String { isRu ? "Статус" : "Status" }
+    static var filterAll: String { isRu ? "Все" : "All" }
+
+    // MARK: - Onboarding
+    static var onboardingSkip: String { isRu ? "Пропустить" : "Skip" }
+    static var onboardingNext: String { isRu ? "Далее" : "Next" }
+    static var onboardingStart: String { isRu ? "Начать" : "Get started" }
+    static var onboardingTitle1: String { isRu ? "Лента аукционов" : "Live auctions" }
+    static var onboardingDesc1: String { isRu ? "Следите за активными торгами и делайте ставки в реальном времени" : "Browse active auctions and place bids in real time" }
+    static var onboardingTitle2: String { isRu ? "3D-просмотр" : "3D viewing" }
+    static var onboardingDesc2: String { isRu ? "Изучайте каждое произведение со всех сторон в полноэкранном 3D" : "Inspect every artwork from any angle in fullscreen 3D" }
+    static var onboardingTitle3: String { isRu ? "Виртуальный шоурум" : "Virtual showroom" }
+    static var onboardingDesc3: String { isRu ? "Соберите свою коллекцию в личной 3D-галерее и пройдитесь по ней" : "Display your collection in a personal 3D gallery and walk through it" }
+
+    // MARK: - Errors
+    static var errorRetry: String { isRu ? "Повторить" : "Retry" }
+    static var errorDismiss: String { isRu ? "Закрыть" : "Dismiss" }
+    static var errorOffline: String { isRu ? "Нет соединения с сервером" : "No server connection" }
+    static var errorGeneric: String { isRu ? "Что-то пошло не так" : "Something went wrong" }
+
     static var newCollection: String { isRu ? "Новая коллекция" : "New Collection" }
     static var editCollection: String { isRu ? "Редактирование" : "Edit Collection" }
     static var collectionName: String { isRu ? "Название коллекции" : "Collection Name" }
@@ -202,21 +248,9 @@ enum L10n {
         isRu ? "\(count) произведений" : "\(count) artworks"
     }
 
-    // MARK: - AR View
-    static var arTitle: String { isRu ? "AR Просмотр" : "AR View" }
-    static var arViewer: String { isRu ? "AR Просмотр" : "AR Viewer" }
-    static var arDescription: String { isRu ? "Просматривайте NFT в дополненной реальности.\nРазмещайте цифровое искусство в реальном мире." : "View NFT artworks in augmented reality.\nPlace digital art in your real environment." }
-    static var selectArtwork: String { isRu ? "Выбрать произведение" : "Select Artwork" }
-    static var launchAR: String { isRu ? "Запустить AR" : "Launch AR" }
-    static var changeArtwork: String { isRu ? "Изменить произведение" : "Change Artwork" }
-    static var tapToPlace: String { isRu ? "Нажмите на стену или пол для размещения" : "Tap on a wall or floor to place artwork" }
+    // MARK: - 3D View
     static var rotateToInspect: String { isRu ? "Вращайте для осмотра" : "Rotate to inspect" }
     static var view3DModel: String { isRu ? "3D Модель" : "3D Model" }
-    static var arShowroom: String { isRu ? "AR Шоурум" : "AR Showroom" }
-    static var pinchToScale: String { isRu ? "Масштабируйте и вращайте жестами" : "Pinch to scale, rotate to turn" }
-    static var tapWallOrFloor: String { isRu ? "Нажмите на стену или пол" : "Tap wall or floor to place" }
-    static var placedOnWall: String { isRu ? "Размещено на стене" : "Placed on wall" }
-    static var placedOnFloor: String { isRu ? "Размещено на полу" : "Placed on floor" }
     static var heatmap: String { isRu ? "Карта" : "Heatmap" }
     static var original: String { isRu ? "Оригинал" : "Original" }
     static var textureComplexity: String { isRu ? "Сложность текстуры" : "Texture Complexity" }
@@ -237,6 +271,7 @@ enum L10n {
     static var version: String { isRu ? "Версия" : "Version" }
     static var network: String { isRu ? "Сеть" : "Network" }
     static var logout: String { isRu ? "Выйти" : "Logout" }
+    static var switchAccount: String { isRu ? "Переключить аккаунт" : "Switch Account" }
 
     // MARK: - Notifications
     static var notifications: String { isRu ? "Уведомления" : "Notifications" }
@@ -245,6 +280,45 @@ enum L10n {
     static var newBid: String { isRu ? "Новая ставка" : "New Bid" }
     static var ok: String { isRu ? "OK" : "OK" }
     static var you: String { isRu ? "Вы" : "You" }
+
+    // MARK: - Buy Now
+    static var buyNow: String { isRu ? "Купить сейчас" : "Buy Now" }
+    static var buyNowUnavailable: String { isRu ? "Моментальная покупка недоступна" : "Buy now unavailable" }
+    static var buyNowSuccess: String { isRu ? "Покупка завершена!" : "Purchase Complete!" }
+    static var buyNowConfirm: String { isRu ? "Подтвердите покупку" : "Confirm Purchase" }
+    static func buyNowConfirmMessage(_ title: String, _ price: String) -> String {
+        isRu ? "Купить \"\(title)\" за \(price)?" : "Buy \"\(title)\" for \(price)?"
+    }
+    static func buyNowNotif(_ title: String, _ price: String) -> String {
+        isRu ? "Вы приобрели \"\(title)\" за \(price)" : "You purchased \"\(title)\" for \(price)"
+    }
+    static var buyNowPrice: String { isRu ? "Блиц-цена" : "Buy Now Price" }
+    static var buyNowOptional: String { isRu ? "Блиц-цена (необязательно)" : "Buy Now Price (optional)" }
+
+    // MARK: - Auto-Broker
+    static var autoBrokerTitle: String { isRu ? "Автоброкер" : "Auto-Broker" }
+    static var autoBrokerEnable: String { isRu ? "Включить автоброкер" : "Enable Auto-Broker" }
+    static var autoBrokerActive: String { isRu ? "Автоброкер активен" : "Auto-Broker Active" }
+    static var autoBrokerMaxAmount: String { isRu ? "Макс. сумма" : "Max Amount" }
+    static func autoBrokerSet(_ amount: String) -> String {
+        isRu ? "Автоброкер установлен до \(amount)" : "Auto-broker set up to \(amount)"
+    }
+    static func autoBrokerPlaced(_ amount: String) -> String {
+        isRu ? "Автоброкер разместил ставку \(amount)" : "Auto-broker placed bid \(amount)"
+    }
+    static var autoBrokerLimitReached: String { isRu ? "Лимит автоброкера достигнут" : "Auto-broker limit reached" }
+    static var autoBrokerDisable: String { isRu ? "Отключить" : "Disable" }
+    static var autoBrokerDescription: String { isRu ? "Система автоматически повышает вашу ставку при перебитии, пока не достигнет указанного лимита." : "The system automatically raises your bid when outbid, up to your specified limit." }
+
+    // MARK: - Auction History
+    static var auctionHistory: String { isRu ? "История торгов" : "Auction History" }
+    static var completedAuctions: String { isRu ? "Завершённые аукционы" : "Completed Auctions" }
+    static var noCompletedAuctions: String { isRu ? "Завершённых аукционов нет" : "No completed auctions" }
+    static var finalBid: String { isRu ? "Финальная ставка" : "Final Bid" }
+    static var winner: String { isRu ? "Победитель" : "Winner" }
+    static var auctionProtocol: String { isRu ? "Протокол торгов" : "Auction Protocol" }
+    static var totalBidsPlaced: String { isRu ? "Всего ставок" : "Total Bids" }
+    static var auctionDurationLabel: String { isRu ? "Длительность" : "Duration" }
 
     // MARK: - Wallet
     static var yourBalance: String { isRu ? "Ваш баланс:" : "Your Balance:" }
@@ -282,18 +356,6 @@ enum L10n {
     }
     static var oneHour: String { isRu ? "1 ч" : "1h" }
     static var sevenDays: String { isRu ? "7 дней" : "7 days" }
-
-    // MARK: - AR (extended)
-    static var arNotSupported: String { isRu ? "AR не поддерживается на этом устройстве" : "AR not supported on this device" }
-    static var arGalleryAdd: String { isRu ? "Добавить" : "Add" }
-    static var arClearAll: String { isRu ? "Очистить" : "Clear" }
-    static var arTakePhoto: String { isRu ? "Фото" : "Photo" }
-    static var arPhotoSaved: String { isRu ? "Сохранено в Фото" : "Saved to Photos" }
-    static var arPhotoNoPermission: String { isRu ? "Нет доступа к Фото" : "No Photos access" }
-    static var arDimensions: String { isRu ? "см" : "cm" }
-    static var arWallMode: String { isRu ? "Стена" : "Wall" }
-    static var arFloorMode: String { isRu ? "Пол" : "Floor" }
-    static var arObjectSelected: String { isRu ? "Объект выбран" : "Object selected" }
 
     // MARK: - Notifications (AuctionService)
     static func auctionWonNotif(_ title: String, _ amount: String) -> String {

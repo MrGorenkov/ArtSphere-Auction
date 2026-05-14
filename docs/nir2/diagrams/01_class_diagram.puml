@@ -1,0 +1,258 @@
+@startuml ArtSphere_ClassDiagram
+' ============================================================
+' ArtSphere Auction — Диаграмма классов
+' Предметная модель + сервисный слой iOS-клиента
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam classFontName "Times New Roman"
+skinparam classFontSize 12
+skinparam defaultFontName "Times New Roman"
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam class {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    ArrowColor #2E2E2E
+    HeaderBackgroundColor #E8EEF7
+}
+skinparam package {
+    BackgroundColor #F6F8FC
+    BorderColor #6C7A96
+}
+hide empty members
+skinparam nodesep 40
+skinparam ranksep 55
+
+' ============================================================
+' ПРЕДМЕТНАЯ МОДЕЛЬ
+' ============================================================
+package "Предметная модель" <<Frame>> {
+
+    together {
+        class User
+        class NFTCollection
+    }
+
+    together {
+        class NFTArtwork
+        class Auction
+        class Bid
+    }
+
+    class User <<Пользователь>> {
+        +id : UUID
+        +username : Имя_пользователя
+        +displayName : Отображаемое_имя
+        +walletAddress : Адрес_кошелька
+        +avatarUrl : URL_аватара
+        +bio : Описание_профиля
+        +balance : Баланс_ETH
+        --
+        +форматированныйКошелёк() : String
+        +форматированныйБаланс() : String
+    }
+
+    class NFTArtwork <<Произведение>> {
+        +id : UUID
+        +title : Название
+        +artistName : Имя_автора
+        +description : Описание
+        +category : Категория
+        +createdAt : Дата_создания
+        +tokenId : Идентификатор_токена
+        +contractAddress : Адрес_контракта
+        +blockchain : Блокчейн_сеть
+        +imageURL : URL_изображения
+        +modelUrl : URL_3D_модели
+        +textureComplexityScore : Сложность_текстуры
+        --
+        +доступноВ3D() : Bool
+    }
+
+    enum ArtworkCategory <<Категория_произведения>> {
+        Цифровая_живопись
+        Генеративное_искусство
+        Фотография
+        Абстракция
+        Пиксель_арт
+        Трёхмерное_искусство
+    }
+
+    enum BlockchainNetwork <<Блокчейн_сеть>> {
+        Ethereum
+        Polygon
+    }
+
+    enum ImageSource <<Источник_изображения>> {
+        Процедурный
+        Загруженный
+        По_URL
+        Встроенный
+    }
+
+    class Auction <<Аукцион>> {
+        +id : UUID
+        +startTime : Дата_старта
+        +endTime : Дата_окончания
+        +currentBid : Текущая_ставка
+        +startingPrice : Стартовая_цена
+        +reservePrice : Резервная_цена
+        +buyNowPrice : Цена_быстрой_покупки
+        +bidStep : Шаг_ставки
+        +status : Статус
+        +winnerId : Идентификатор_победителя
+        --
+        +активен() : Bool
+        +завершён() : Bool
+        +минимальнаяСледующаяСтавка() : Double
+        +резервДостигнут() : Bool
+    }
+
+    enum AuctionStatus <<Статус_аукциона>> {
+        Ожидает_начала
+        Активен
+        Завершён
+        Продан
+    }
+
+    class Bid <<Ставка>> {
+        +id : UUID
+        +userId : Идентификатор_пользователя
+        +userName : Имя_пользователя
+        +amount : Сумма_ставки
+        +timestamp : Временная_метка
+        +synced : Синхронизирована
+        --
+        +форматированнаяСумма() : String
+    }
+
+    class NFTCollection <<Коллекция>> {
+        +id : UUID
+        +name : Название
+        +description : Описание
+        +coverImageArtworkId : Обложка
+        +isDefault : По_умолчанию
+        +createdAt : Дата_создания
+        +updatedAt : Дата_обновления
+        --
+        +количествоРабот() : Int
+    }
+
+    class Notification <<Уведомление>> {
+        +id : UUID
+        +type : Тип_уведомления
+        +title : Заголовок
+        +message : Сообщение
+        +createdAt : Дата_создания
+        +isRead : Прочитано
+        +relatedAuctionId : Связанный_аукцион
+    }
+
+    enum NotificationType <<Тип_уведомления>> {
+        Ставка_размещена
+        Перебита_ставка
+        Аукцион_выигран
+        Новое_произведение
+    }
+}
+
+' ============================================================
+' СЕРВИСНЫЙ СЛОЙ
+' ============================================================
+package "Сервисный слой iOS" <<Frame>> {
+
+    class AuthService <<Сервис_аутентификации>> {
+        -tokenStorage : Хранилище_токена_Keychain
+        -currentUser : Текущий_пользователь
+        --
+        +войти(email, пароль) : User
+        +зарегистрировать(данные) : User
+        +выйти() : Void
+        +текущийТокен() : String
+    }
+
+    class NetworkService <<Сервис_сетевых_запросов>> {
+        -baseURL : Базовый_URL
+        -session : URLSession
+        --
+        +запрос<T>(endpoint) : T
+        +запросБезОтвета(endpoint) : Void
+        +загрузить(данные, endpoint) : URL
+    }
+
+    class AuctionService <<Сервис_аукционов>> {
+        -mode : Режим_работы
+        -webSocket : WebSocket_соединение
+        --
+        +загрузитьАукционы() : [Auction]
+        +сделатьСтавку(idАукциона, сумма) : Bid
+        +подписатьсяНаОбновления(idАукциона)
+    }
+
+    class BidQueueService <<Очередь_офлайн_ставок>> {
+        -pendingBids : Ожидающие_ставки
+        -pathMonitor : Монитор_сети
+        --
+        +добавитьВОчередь(ставка) : Void
+        +синхронизировать() : Void
+        -экспоненциальнаяЗадержка(попытка) : TimeInterval
+    }
+
+    class WebSocketService <<Сервис_WebSocket>> {
+        -socket : Сокет
+        -reconnectAttempts : Попытки_переподключения
+        --
+        +подключить(url) : Void
+        +отправить(сообщение) : Void
+        +приПолучении(обработчик) : Void
+    }
+
+    class NotificationService <<Сервис_уведомлений>> {
+        +получитьУведомления() : [Notification]
+        +пометитьПрочитанным(id) : Void
+        +зарегистрироватьТокенУстройства(token) : Void
+    }
+
+    class AnalyticsService <<Сервис_аналитики>> {
+        +логировать(событие, параметры) : Void
+        +установитьСвойство(ключ, значение) : Void
+    }
+}
+
+' ============================================================
+' СВЯЗИ: ПРЕДМЕТНАЯ МОДЕЛЬ
+' ============================================================
+User "1" *-- "0..*" NFTCollection : владеет
+User "1" --> "0..*" NFTArtwork : создаёт
+User "1" --> "0..*" Bid : размещает
+NFTCollection "*" --> "*" NFTArtwork : содержит
+
+NFTArtwork "1" --> "0..1" Auction : выставлено на
+Auction "1" *-- "0..*" Bid : принимает
+Auction "1" ..> "0..1" User : победитель
+
+NFTArtwork ..> ArtworkCategory
+NFTArtwork ..> BlockchainNetwork
+NFTArtwork ..> ImageSource
+Auction ..> AuctionStatus
+Notification ..> NotificationType
+
+User "1" --> "0..*" Notification : получает
+
+' ============================================================
+' СВЯЗИ: СЕРВИСЫ
+' ============================================================
+AuctionService --> NetworkService : использует
+AuctionService --> WebSocketService : использует
+AuctionService --> BidQueueService : делегирует офлайн
+BidQueueService --> NetworkService : синхронизирует через
+AuthService --> NetworkService : использует
+NotificationService --> NetworkService : использует
+
+AuctionService ..> Auction : управляет
+AuctionService ..> Bid : создаёт
+AuthService ..> User : управляет
+NotificationService ..> Notification : управляет
+
+@enduml

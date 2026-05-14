@@ -1,0 +1,193 @@
+Горенков Александр Андреевич
+ИУ5-73Б
+
+Тема: Мобильное приложение для аукциона цифровых произведений искусства на платформе iOS
+
+================================================================================
+
+Ссылки на GitHub:
+
+Мобильное iOS приложение + Backend (Vapor/Swift):
+https://github.com/MrGorenkov/ArtSphere-Auction.git
+
+================================================================================
+
+Архитектура приложения: MVVM + Clean Architecture
+
+Стек технологий:
+- iOS: Swift, SwiftUI, SceneKit, Accelerate
+- Backend: Vapor 4 (Swift), Fluent ORM, JWT
+- БД: PostgreSQL 16 (Railway, TLS)
+- Хранилище: Cloudflare R2 (S3-compatible)
+- Реальное время: WebSocket (Vapor NIO)
+- Хостинг: Railway (Docker-контейнер)
+- Генерация проекта: XcodeGen
+
+================================================================================
+
+Структура проекта:
+
+NFTArts/
+├── Core/
+│   ├── App/              — NFTArtsApp.swift (точка входа)
+│   ├── Navigation/       — MainTabView.swift (5 вкладок)
+│   ├── Theme/            — NFTColors, NFTTypography
+│   └── Localization/     — L10n.swift (RU/EN)
+├── Models/
+│   ├── NFTArtwork.swift  — Модель произведения
+│   ├── Auction.swift     — Модель аукциона
+│   ├── User.swift        — Модель пользователя
+│   └── Collection.swift  — Модель коллекции
+├── Services/
+│   ├── NetworkService.swift    — REST API клиент
+│   ├── WebSocketService.swift  — WebSocket клиент (WSS)
+│   ├── AuctionService.swift    — Бизнес-логика аукционов
+│   ├── BidQueueService.swift   — Очередь оффлайн-ставок
+│   ├── KeychainService.swift   — Хранение JWT в Keychain
+│   ├── AnalyticsService.swift  — Аналитика
+│   └── MetricsService.swift    — Метрики
+├── Features/
+│   ├── Auth/             — LoginView, RegisterView
+│   ├── Feed/             — FeedView (лента с параллакс-картами)
+│   ├── Detail/           — ArtworkDetailView (детали + ставки)
+│   ├── Create/           — CreateNFTView (3-шаговый wizard)
+│   ├── Collection/       — MyCollectionView, CollectionDetailView
+│   ├── Profile/          — ProfileView, EditProfileView
+│   ├── Messages/         — MessagesView, ChatView
+│   └── Notifications/    — NotificationsView
+├── Components/
+│   ├── Artwork3DView.swift       — 3D SceneKit вьювер
+│   ├── FullScreen3DViewer.swift  — Полноэкранный 3D
+│   ├── NormalMapGenerator.swift  — Sobel + Accelerate
+│   ├── BidButton.swift           — Кнопка ставки с пульсацией
+│   ├── CountdownTimerView.swift  — Обратный отсчёт
+│   └── AvatarView.swift          — Аватар пользователя
+└── Resources/
+    └── Assets.xcassets           — Иконка, цвета
+
+backend/
+├── Sources/App/
+│   ├── entrypoint.swift       — Запуск сервера, TLS, DB
+│   ├── configure.swift        — Маршруты, middleware
+│   ├── Controllers/           — REST контроллеры
+│   ├── Models/                — Fluent модели
+│   └── Migrations/            — Миграции БД
+├── Dockerfile                 — Сборка backend
+└── Package.swift              — Swift Package Manager
+
+================================================================================
+
+Схема базы данных (PostgreSQL):
+
+Таблицы:
+- users (id, username, email, password_hash, display_name, bio, avatar_url, balance, created_at)
+- artworks (id, title, description, image_url, model_url, artist_name, category, blockchain, token_id, creator_id, like_count, created_at)
+- auctions (id, artwork_id, creator_id, starting_price, current_bid, reserve_price, bid_step, bid_count, start_time, end_time, status)
+- bids (id, auction_id, user_id, amount, timestamp, synced)
+- collections (id, user_id, name, description, created_at)
+- collection_artworks (id, collection_id, artwork_id)
+- comments (id, artwork_id, user_id, text, created_at)
+- likes (id, artwork_id, user_id, created_at)
+- follows (id, follower_id, following_id, created_at)
+- messages (id, sender_id, receiver_id, text, artwork_id, created_at)
+- notifications (id, user_id, type, title, message, is_read, created_at)
+- device_tokens (id, user_id, token, platform, created_at)
+
+================================================================================
+
+API эндпоинты (REST):
+
+Аутентификация:
+  POST /api/v1/auth/register
+  POST /api/v1/auth/login
+
+Произведения:
+  GET  /api/v1/artworks
+  GET  /api/v1/artworks/:id
+  POST /api/v1/artworks (создание с загрузкой изображения)
+
+Аукционы:
+  GET  /api/v1/auctions
+  GET  /api/v1/auctions/:id
+  POST /api/v1/auctions/:id/bid
+
+Коллекции:
+  GET  /api/v1/collections
+  POST /api/v1/collections
+  PUT  /api/v1/collections/:id
+  DELETE /api/v1/collections/:id
+  POST /api/v1/collections/:id/artworks/:artworkId
+  DELETE /api/v1/collections/:id/artworks/:artworkId
+
+Социальное:
+  GET  /api/v1/artworks/:id/comments
+  POST /api/v1/artworks/:id/comments
+  POST /api/v1/artworks/:id/like
+  GET  /api/v1/artworks/:id/like-status
+  POST /api/v1/users/:id/follow
+  GET  /api/v1/users/:id/follow-status
+
+Сообщения:
+  GET  /api/v1/messages/conversations
+  GET  /api/v1/messages/:userId
+  POST /api/v1/messages
+
+Профиль:
+  GET  /api/v1/profile
+  PUT  /api/v1/profile
+  POST /api/v1/profile/avatar
+
+Стили / Категории:
+  GET  /api/v1/styles
+
+Пакетная синхронизация:
+  POST /api/v1/sync/bids
+
+WebSocket:
+  WS /api/v1/ws (реальное время: ставки, уведомления)
+
+================================================================================
+
+Реализованный функционал:
+
+✅ 5-вкладочная навигация (Лента, Сообщения, Создать, Коллекция, Профиль)
+✅ JWT аутентификация (регистрация/вход/выход), токен в Keychain
+✅ Лента с 3D-параллакс карточками и staggered-анимацией
+✅ Pull-to-refresh на всех списках
+✅ 3D просмотр произведений (SceneKit + карты нормалей Sobel/Accelerate)
+✅ Displacement-маппинг для рельефа мазков
+✅ Полноэкранный 3D с orbit camera и поддержкой USDZ
+✅ Детальный просмотр с 4 вкладками (Обзор/Ставки/Комментарии/Детали)
+✅ Ставки в реальном времени через WebSocket
+✅ Оффлайн-очередь ставок (BidQueueService + NWPathMonitor)
+✅ Пакетная синхронизация ставок (POST /api/v1/sync/bids)
+✅ Экспоненциальный backoff для WebSocket и BidQueue
+✅ Создание NFT с загрузкой изображения на сервер
+✅ Управление коллекциями (CRUD)
+✅ Лайки и комментарии
+✅ Подписки на пользователей
+✅ Встроенный чат (сообщения между пользователями)
+✅ Шаринг произведений через чат
+✅ Уведомления (ставки, выигрыши, перебития, создания)
+✅ Профиль с API-статистикой и аватаром (локально + Cloudflare R2)
+✅ Тёмная и светлая темы
+✅ Русская и английская локализация
+✅ Развёртывание на Railway (Docker + PostgreSQL + TLS)
+✅ Хранилище изображений на Cloudflare R2
+
+================================================================================
+
+Скриншоты: [приложить скриншоты экранов приложения]
+
+- Экран авторизации (вход/регистрация)
+- Главная лента с аукционами
+- Детальный просмотр произведения (2D)
+- 3D-просмотр с картой нормалей
+- Полноэкранный 3D-просмотр
+- Размещение ставки
+- Создание NFT (3 шага)
+- Управление коллекциями
+- Профиль пользователя
+- Настройки (тема, язык)
+- Сообщения / чат
+- Уведомления

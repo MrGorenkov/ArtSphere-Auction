@@ -8,7 +8,7 @@ struct FeedView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
                     // Notifications banner
                     notificationBanner
@@ -26,19 +26,25 @@ struct FeedView: View {
                     auctionGrid
                 }
             }
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle(L10n.feedTitle)
             .searchable(text: $viewModel.searchText, prompt: L10n.searchArtworks)
             .refreshable {
+                HapticService.medium()
                 await auctionService.loadFromAPI()
             }
             .onAppear {
                 viewModel.bind(to: auctionService)
                 MetricsService.shared.trackFeatureUsage("feed")
+                ImageLoader.prefetch(auctionService.auctions.prefix(8).map { $0.artwork })
+            }
+            .onChange(of: auctionService.auctions.count) { _ in
+                ImageLoader.prefetch(auctionService.auctions.prefix(8).map { $0.artwork })
             }
             .overlay {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .scaleEffect(1.5)
+                if auctionService.auctions.isEmpty && auctionService.isLoadingFromAPI {
+                    SkeletonFeedList()
+                        .padding(.top, 8)
                 }
             }
         }
@@ -97,6 +103,7 @@ struct FeedView: View {
                         icon: category.iconName,
                         isSelected: viewModel.selectedCategory == category
                     ) {
+                        HapticService.tap()
                         withAnimation(.spring(response: 0.3)) {
                             viewModel.selectCategory(category)
                         }
@@ -186,6 +193,14 @@ struct CategoryChip: View {
 struct FeaturedAuctionCard: View {
     let auction: Auction
 
+    private var goldGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(red: 1.00, green: 0.85, blue: 0.40), Color(red: 0.95, green: 0.65, blue: 0.20)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             ArtworkImageView(artwork: auction.artwork)
@@ -223,7 +238,31 @@ struct FeaturedAuctionCard: View {
             .clipShape(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
             )
+
+            // Featured badge — top-leading
+            HStack(spacing: 4) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 10, weight: .bold))
+                Text(L10n.featuredBadge)
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(0.8)
+            }
+            .foregroundStyle(.black.opacity(0.85))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(goldGradient, in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.5)
+            )
+            .shadow(color: Color.orange.opacity(0.5), radius: 6, x: 0, y: 2)
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(goldGradient, lineWidth: 1.5)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 18, x: 0, y: 10)
     }
 }

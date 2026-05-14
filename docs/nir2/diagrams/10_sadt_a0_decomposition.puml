@@ -1,0 +1,59 @@
+@startuml ArtSphere_SADT_A0
+' ============================================================
+' ArtSphere Auction — Декомпозиция уровня A0 (SADT)
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam rectangle {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+}
+skinparam arrowColor #2E2E2E
+skinparam arrowFontSize 10
+
+rectangle "**A1**\nАутентификация\nи регистрация\nпользователя" as A1
+rectangle "**A2**\nПросмотр ленты\nпроизведений" as A2
+rectangle "**A3**\nСоздание\nпроизведения\nи публикация\nаукциона" as A3
+rectangle "**A4**\nУчастие\nв аукционе" as A4
+rectangle "**A5**\nУправление\nколлекцией" as A5
+rectangle "**A6**\nВзаимодействие\nмежду\nпользователями" as A6
+
+' Последовательность управления через ICOM-стрелки
+A1 -right-> A2 : JWT-токен
+A2 -right-> A3 : выбор функции
+A2 -down-> A4  : переход на\nдетальный экран
+
+A3 -down-> A4  : новый аукцион
+A4 -right-> A5 : победа\nв аукционе
+A5 -down-> A6  : приглашение\nк обсуждению
+A4 -down-> A6  : комментарии\nпо лоту
+
+' ==== Глобальные входы / управление / механизмы ====
+rectangle "Учётные данные" as GIn1
+rectangle "Изображение,\nметаданные,\nсумма ставки" as GIn2
+
+GIn1 -right-> A1
+GIn2 -down-> A3
+
+rectangle "Состояние\nколлекции,\nрезультаты торгов" as GOut1
+rectangle "Push-события,\nуведомления" as GOut2
+
+A5 -right-> GOut1
+A6 -right-> GOut2
+
+rectangle "HIG, ТЗ,\nERC-721,\nрегламент API" as GCtrl
+GCtrl -down-> A1
+GCtrl -down-> A3
+GCtrl -down-> A4
+
+rectangle "iPhone, Vapor 4,\nPostgreSQL, MinIO,\nWebSocket, APNs" as GMech
+GMech -up-> A1
+GMech -up-> A4
+GMech -up-> A6
+
+@enduml

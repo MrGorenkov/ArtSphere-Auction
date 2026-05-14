@@ -1,0 +1,275 @@
+@startuml ArtSphere_ERDiagram
+' ============================================================
+' ArtSphere Auction — ER-диаграмма базы данных PostgreSQL
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam linetype ortho
+skinparam arrowFontSize 12
+skinparam arrowFontStyle bold
+skinparam arrowColor #3D3D3D
+
+skinparam entity {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+    FontSize 12
+}
+
+hide empty members
+skinparam nodesep 55
+skinparam ranksep 90
+
+' ============================================================
+' Пользователи и профили
+' ============================================================
+entity "users\n«Пользователи»" as users {
+    * **id** : UUID <<PK>>
+    --
+    * username : varchar <<UK>>
+    * display_name : varchar
+    email : varchar
+    * wallet_address : varchar <<UK>>
+    card_number : varchar
+    bio : text
+    avatar_url : varchar
+    * balance : numeric
+    * password_hash : varchar
+    * is_active : boolean
+    * is_admin : boolean
+    * created_at : timestamp
+    updated_at : timestamp
+}
+
+' ============================================================
+' Стили искусства (справочник)
+' ============================================================
+entity "art_styles\n«Стили искусства»" as styles {
+    * **id** : UUID <<PK>>
+    --
+    * name : varchar <<UK>>
+    * description : text
+    icon_name : varchar
+    * created_at : timestamp
+}
+
+' ============================================================
+' Произведения искусства
+' ============================================================
+entity "artworks\n«Произведения»" as artworks {
+    * **id** : UUID <<PK>>
+    --
+    creator_id : UUID <<FK users>>
+    style_id : UUID <<FK styles>>
+    * title : varchar
+    * artist_name : varchar
+    * description : text
+    image_url : varchar
+    file_path : varchar
+    price : numeric
+    * is_for_sale : boolean
+    * blockchain : varchar
+    metadata_json : text
+    * is_published : boolean
+    * created_at : timestamp
+    updated_at : timestamp
+}
+
+' ============================================================
+' 3D визуализации произведений
+' ============================================================
+entity "visualizations_3d\n«3D-визуализации»" as viz {
+    * **id** : UUID <<PK>>
+    --
+    * artwork_id : UUID <<FK artworks>>
+    * file_url : varchar
+    file_size_bytes : bigint
+    * format : varchar
+    normal_map_url : varchar
+    thumbnail_url : varchar
+    * uploaded_at : timestamp
+}
+
+' ============================================================
+' NFT-токены
+' ============================================================
+entity "nft_tokens\n«NFT-токены»" as tokens {
+    * **id** : UUID <<PK>>
+    --
+    * artwork_id : UUID <<FK artworks>>
+    * owner_id : UUID <<FK users>>
+    * contract_address : varchar
+    token_id_on_chain : varchar
+    * blockchain : varchar
+    * status : varchar
+    * minted_at : timestamp
+    metadata_uri : varchar
+}
+
+' ============================================================
+' Аукционы
+' ============================================================
+entity "auctions\n«Аукционы»" as auctions {
+    * **id** : UUID <<PK>>
+    --
+    * artwork_id : UUID <<FK artworks>>
+    creator_id : UUID <<FK users>>
+    * starting_price : numeric
+    * current_bid : numeric
+    reserve_price : numeric
+    * bid_step : numeric
+    * start_time : timestamp
+    * end_time : timestamp
+    * status : varchar
+    winner_id : UUID <<FK users>>
+    * bid_count : integer
+    * created_at : timestamp
+    updated_at : timestamp
+}
+
+' ============================================================
+' Ставки
+' ============================================================
+entity "bids\n«Ставки»" as bids {
+    * **id** : UUID <<PK>>
+    --
+    * auction_id : UUID <<FK auctions>>
+    * user_id : UUID <<FK users>>
+    * amount : numeric
+    * synced : boolean
+    * created_at : timestamp
+}
+
+' ============================================================
+' Коллекции пользователей
+' ============================================================
+entity "collections\n«Коллекции»" as collections {
+    * **id** : UUID <<PK>>
+    --
+    * user_id : UUID <<FK users>>
+    * name : varchar
+    * description : text
+    cover_artwork_id : UUID
+    * is_private : boolean
+    * is_default : boolean
+    * created_at : timestamp
+    updated_at : timestamp
+}
+
+' ============================================================
+' Связующая сущность: произведение в коллекции
+' ============================================================
+entity "collection_artworks\n«Состав коллекции»" as coll_pivot {
+    * **id** : UUID <<PK>>
+    --
+    * collection_id : UUID <<FK collections>>
+    * artwork_id : UUID <<FK artworks>>
+    * position : integer
+    user_note : text
+    * added_at : timestamp
+}
+
+' ============================================================
+' Транзакции (передача NFT)
+' ============================================================
+entity "transactions\n«Транзакции»" as txs {
+    * **id** : UUID <<PK>>
+    --
+    auction_id : UUID <<FK auctions>>
+    * buyer_id : UUID <<FK users>>
+    * seller_id : UUID <<FK users>>
+    * artwork_id : UUID <<FK artworks>>
+    nft_token_id : UUID <<FK tokens>>
+    * amount : numeric
+    * status : varchar
+    tx_hash : varchar
+    * created_at : timestamp
+}
+
+' ============================================================
+' Социальные сущности
+' ============================================================
+entity "likes\n«Лайки»" as likes {
+    * **id** : UUID <<PK>>
+    --
+    * user_id : UUID <<FK users>>
+    * artwork_id : UUID <<FK artworks>>
+    * created_at : timestamp
+}
+
+entity "comments\n«Комментарии»" as comments {
+    * **id** : UUID <<PK>>
+    --
+    * artwork_id : UUID <<FK artworks>>
+    * user_id : UUID <<FK users>>
+    * text : text
+    * created_at : timestamp
+}
+
+entity "follows\n«Подписки»" as follows {
+    * **id** : UUID <<PK>>
+    --
+    * follower_id : UUID <<FK users>>
+    * following_id : UUID <<FK users>>
+    * created_at : timestamp
+}
+
+entity "messages\n«Сообщения»" as messages {
+    * **id** : UUID <<PK>>
+    --
+    * sender_id : UUID <<FK users>>
+    * receiver_id : UUID <<FK users>>
+    artwork_id : UUID <<FK artworks>>
+    * text : text
+    * is_read : boolean
+    * created_at : timestamp
+}
+
+' ============================================================
+' СВЯЗИ  (метки короткие и на отдельных строках, чтобы не налезали)
+' ============================================================
+
+' --- Произведения и их атрибуты ---
+users     ||--o{ artworks  : "  создаёт  "
+styles    ||--o{ artworks  : "  классифицирует  "
+artworks  ||--o{ viz       : "  имеет\n  3D-модель  "
+artworks  ||--o{ tokens    : "  токенизировано  "
+users     ||--o{ tokens    : "  владеет  "
+
+' --- Аукцион ---
+artworks  ||--o{ auctions  : "  выставлено\n  на аукционе  "
+users     ||--o{ auctions  : "  создаёт\n  аукцион  "
+auctions  ||--o{ bids      : "  принимает\n  ставки  "
+users     ||--o{ bids      : "  размещает\n  ставку  "
+
+' --- Коллекции ---
+users       ||--o{ collections : "  владеет  "
+collections ||--o{ coll_pivot  : "  содержит  "
+artworks    ||--o{ coll_pivot  : "  входит\n  в коллекцию  "
+
+' --- Транзакции ---
+auctions ||--o{ txs : "  завершается\n  транзакцией  "
+users    ||--o{ txs : "  покупатель  "
+users    ||--o{ txs : "  продавец  "
+artworks ||--o{ txs : "  продано  "
+tokens   ||--o{ txs : "  передаётся  "
+
+' --- Социальные связи ---
+users    ||--o{ likes    : "  ставит  "
+artworks ||--o{ likes    : "  получает\n  лайки  "
+
+users    ||--o{ comments : "  пишет  "
+artworks ||--o{ comments : "  комментируется  "
+
+users    ||--o{ follows  : "  подписчик  "
+users    ||--o{ follows  : "  автор  "
+
+users    ||--o{ messages : "  отправитель  "
+users    ||--o{ messages : "  получатель  "
+artworks ||--o{ messages : "  упомянуто\n  в сообщении  "
+
+@enduml

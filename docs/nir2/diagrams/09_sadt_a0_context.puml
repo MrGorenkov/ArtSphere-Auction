@@ -1,0 +1,51 @@
+@startuml ArtSphere_SADT_Context
+' ============================================================
+' ArtSphere Auction — Контекстная диаграмма SADT (уровень A-0)
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam rectangle {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+}
+skinparam arrowColor #2E2E2E
+skinparam arrowFontSize 11
+
+left to right direction
+
+rectangle "**A-0**\nФункционирование\nсистемы\n«ArtSphere Auction»" as A0
+
+' ==== Входы (слева) ====
+rectangle "Данные пользователя:\nизображение произведения,\nметаданные, параметры\nаукциона, суммы ставок" as In1
+rectangle "Учётные данные:\nадрес кошелька,\nпароль" as In2
+
+In1 -right-> A0 : **Вход**
+In2 -right-> A0 : **Вход**
+
+' ==== Выходы (справа) ====
+rectangle "Состояние коллекции,\nистория ставок,\nрезультаты аукционов" as Out1
+rectangle "Push-уведомления,\nобновления по WebSocket" as Out2
+
+A0 -right-> Out1 : **Выход**
+A0 -right-> Out2 : **Выход**
+
+' ==== Управление (сверху) ====
+rectangle "Техническое задание,\nHuman Interface Guidelines,\nрегламенты API" as Ctrl1
+rectangle "ERC-721, JWT (RFC 7519),\nWebSocket (RFC 6455)" as Ctrl2
+
+Ctrl1 -down-> A0 : **Управление**
+Ctrl2 -down-> A0 : **Управление**
+
+' ==== Механизмы (снизу) ====
+rectangle "iPhone (iOS 16+),\nSwift / SwiftUI / SceneKit" as Mech1
+rectangle "Сервер Vapor 4,\nPostgreSQL 16,\nMinIO S3, APNs" as Mech2
+
+Mech1 -up-> A0 : **Механизм**
+Mech2 -up-> A0 : **Механизм**
+
+@enduml

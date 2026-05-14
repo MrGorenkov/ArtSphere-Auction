@@ -1,0 +1,189 @@
+@startuml ArtSphere_Components
+' ============================================================
+' ArtSphere Auction — Компонентная диаграмма
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam component {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+    FontSize 12
+}
+skinparam interface {
+    BackgroundColor #FFF8E8
+    BorderColor #7A6A2A
+}
+skinparam package {
+    BackgroundColor #F6F8FC
+    BorderColor #6C7A96
+}
+skinparam database {
+    BackgroundColor #F0F4FA
+    BorderColor #2E2E2E
+}
+skinparam cloud {
+    BackgroundColor #F4F7FC
+    BorderColor #6C7A96
+}
+skinparam arrowColor #3D3D3D
+skinparam nodesep 40
+skinparam ranksep 55
+
+' ============================================================
+' iOS-клиент
+' ============================================================
+package "iOS-клиент (Swift / SwiftUI)" <<Frame>> {
+
+    package "Слой представления" {
+        component [FeedView\n«Лента»] as Feed
+        component [ArtworkDetailView\n«Карточка произведения»] as Detail
+        component [MyCollectionView\n«Коллекция пользователя»] as Coll
+        component [ProfileView\n«Профиль»] as Profile
+        component [CreateNFTView\n«Создание NFT»] as Create
+        component [FullScreen3DViewer\n«Полноэкранный\n3D-просмотр»] as View3D
+    }
+
+    package "Слой представлений\n(ViewModel)" {
+        component [AuctionViewModel] as AuctionVM
+        component [ProfileViewModel] as ProfileVM
+        component [CollectionViewModel] as CollVM
+    }
+
+    package "Сервисный слой" {
+        component [AuthService] as Auth
+        component [NetworkService] as Net
+        component [WebSocketService] as WS
+        component [AuctionService] as AuctSvc
+        component [BidQueueService\n«Очередь\nофлайн-ставок»] as BidQ
+        component [NotificationService] as Notif
+        component [AnalyticsService] as Analytics
+        component [KeychainStorage\n«Keychain»] as Keychain
+    }
+
+    package "Слой рендеринга 3D" {
+        component [SceneKitRenderer] as SceneKit
+        component [NormalMapGenerator\n«Sobel + Accelerate»] as NormalMap
+    }
+
+    package "Локальное хранилище" {
+        database "UserDefaults" as UD
+        database "Файловая\nсистема\n(аватар, кэш)" as FS
+    }
+}
+
+interface "REST API" as IREST
+interface "WebSocket" as IWS
+interface "APNs" as IAPNs
+interface "S3 API" as IS3
+
+' ============================================================
+' Серверная часть
+' ============================================================
+package "Серверная часть (Vapor 4 / Swift)" <<Frame>> {
+
+    component [AuthController\n«Контроллер\nаутентификации»] as AuthCtrl
+    component [AuctionController\n«Контроллер\nаукционов»] as AuctCtrl
+    component [ArtworkController\n«Контроллер\nпроизведений»] as ArtCtrl
+    component [BidController\n«Контроллер\nставок»] as BidCtrl
+    component [SyncController\n«Контроллер\nсинхронизации»] as SyncCtrl
+    component [UploadController\n«Контроллер\nзагрузок»] as UpCtrl
+    component [NotificationController] as NotifCtrl
+
+    component [JWTMiddleware\n«Проверка JWT»] as JWT
+    component [WebSocketHub\n«Концентратор\nWS-соединений»] as Hub
+    component [FluentORM\n«Fluent ORM»] as ORM
+    component [S3Client\n«Клиент MinIO»] as S3Client
+    component [APNsClient\n«Клиент APNs»] as APNsClient
+}
+
+' ============================================================
+' Хранилища
+' ============================================================
+database "PostgreSQL\n«Основная СУБД»" as PG
+cloud "MinIO S3\n«Объектное\nхранилище»" as MinIO
+cloud "Apple Push\nNotification Service" as APNSSrv
+
+' ============================================================
+' Связи iOS-клиента
+' ============================================================
+Feed    --> AuctionVM
+Detail  --> AuctionVM
+Coll    --> CollVM
+Profile --> ProfileVM
+Create  --> AuctionVM
+
+Detail  --> View3D
+View3D  --> SceneKit
+View3D  --> NormalMap
+
+AuctionVM --> AuctSvc
+ProfileVM --> Auth
+ProfileVM --> Net
+CollVM    --> Net
+
+AuctSvc   --> Net
+AuctSvc   --> WS
+AuctSvc   --> BidQ
+BidQ      --> Net
+Auth      --> Net
+Auth      --> Keychain
+Notif     --> Net
+Analytics --> UD
+
+Profile --> FS
+
+' ============================================================
+' Связи клиента с интерфейсами
+' ============================================================
+Net   --( IREST
+WS    --( IWS
+Notif --( IAPNs
+
+' ============================================================
+' Связи сервера
+' ============================================================
+IREST -down- AuthCtrl
+IREST -down- AuctCtrl
+IREST -down- ArtCtrl
+IREST -down- BidCtrl
+IREST -down- SyncCtrl
+IREST -down- UpCtrl
+IREST -down- NotifCtrl
+
+IWS   -down- Hub
+
+AuthCtrl  --> JWT
+AuctCtrl  --> JWT
+BidCtrl   --> JWT
+SyncCtrl  --> JWT
+UpCtrl    --> JWT
+NotifCtrl --> JWT
+
+AuthCtrl  --> ORM
+AuctCtrl  --> ORM
+ArtCtrl   --> ORM
+BidCtrl   --> ORM
+SyncCtrl  --> ORM
+NotifCtrl --> ORM
+
+BidCtrl   --> Hub : публикация\nсобытий
+Hub       --> APNsClient : отправка\npush
+APNsClient --( IAPNs
+
+UpCtrl    --> S3Client
+ArtCtrl   --> S3Client
+
+' ============================================================
+' Связи с хранилищами
+' ============================================================
+ORM       --> PG
+S3Client --( IS3
+IS3       -- MinIO
+APNsClient --> APNSSrv
+
+@enduml

@@ -77,6 +77,18 @@ struct ProfileView: View {
                         auction.isActive && auction.bids.contains { $0.userId == auctionService.currentUser.id }
                     }.count
                     StatRow(icon: "gavel.fill", title: L10n.activeBids, value: "\(activeBids)")
+
+                    NavigationLink {
+                        AuctionHistoryView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundStyle(.nftPurple)
+                                .frame(width: 24)
+                            Text(L10n.auctionHistory)
+                                .font(NFTTypography.subheadline)
+                        }
+                    }
                 }
 
                 // About
@@ -92,6 +104,45 @@ struct ProfileView: View {
                         Spacer()
                         Text("Polygon (Testnet)")
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                // Quick Account Switcher (for testing)
+                Section(L10n.switchAccount) {
+                    ForEach(Self.testAccounts, id: \.wallet) { account in
+                        let isCurrent = authManager.currentUser?.walletAddress == account.wallet
+                        Button {
+                            if !isCurrent {
+                                switchAccount(wallet: account.wallet)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Circle()
+                                    .fill(isCurrent ? Color.nftPurple : Color(.tertiarySystemFill))
+                                    .frame(width: 32, height: 32)
+                                    .overlay {
+                                        Text(String(account.name.prefix(1)))
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(isCurrent ? .white : .primary)
+                                    }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(account.name)
+                                        .font(NFTTypography.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundStyle(.primary)
+                                    Text(String(account.wallet.prefix(10)) + "...")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                        .monospaced()
+                                }
+                                Spacer()
+                                if isCurrent {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.nftPurple)
+                                }
+                            }
+                        }
+                        .disabled(isCurrent)
                     }
                 }
 
@@ -158,7 +209,8 @@ struct ProfileView: View {
                 avatarUrl: auctionService.currentUser.avatarUrl,
                 displayName: auctionService.currentUser.displayName,
                 size: 60,
-                isCurrentUser: true
+                isCurrentUser: true,
+                userId: auctionService.currentUser.id
             )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -177,6 +229,22 @@ struct ProfileView: View {
         .padding(.vertical, 4)
     }
 
+    private static let testAccounts: [(name: String, wallet: String)] = [
+        ("Алексей Горенков", "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD01"),
+        ("Иван Артов", "0x8ba1f109551bD432803012645Ac136ddd64DBA72"),
+        ("Анна Крипто", "0x2546BcD3c84621e976D8185a91A922aE77ECEc30"),
+        ("Сергей Блокчейнов", "0xbDA5747bFD65F08deb54cb465eB87D40e51B197E"),
+        ("Мария Пиксель", "0xdD2FD4581271e230360230F9337D5c0430Bf44C0"),
+        ("Дмитрий Фотонов", "0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199"),
+        ("Елена Абстрактная", "0xde9be858da4a475276426320D5e9262eCfc3d0CB"),
+    ]
+
+    private func switchAccount(wallet: String) {
+        Task {
+            await authManager.login(walletAddress: wallet, password: "password123")
+        }
+    }
+
     private func themeDisplayName(_ theme: ThemeManager.AppTheme) -> String {
         switch theme {
         case .system: return L10n.themeSystem
@@ -193,8 +261,10 @@ struct AvatarView: View {
     let displayName: String
     let size: CGFloat
     var isCurrentUser: Bool = false
+    var userId: UUID? = nil
 
     @State private var image: UIImage?
+    @State private var loadedForUserId: UUID?
 
     var body: some View {
         Group {
@@ -219,13 +289,26 @@ struct AvatarView: View {
             image = nil
             loadAvatar()
         }
+        .onChange(of: userId) { _ in
+            image = nil
+            loadAvatar()
+        }
     }
 
     private func loadAvatar() {
+        let currentUserId = userId ?? (isCurrentUser ? AuctionService.shared.currentUser.id : nil)
+
         // Only load local avatar for the current user
-        if isCurrentUser, let localImage = AuctionService.loadLocalAvatarImage() {
-            withAnimation(.easeIn(duration: 0.3)) { self.image = localImage }
-            return
+        if isCurrentUser, let uid = currentUserId {
+            let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("user_avatar_\(uid.uuidString).jpg")
+            if FileManager.default.fileExists(atPath: path.path),
+               let data = try? Data(contentsOf: path),
+               let localImage = UIImage(data: data) {
+                loadedForUserId = uid
+                withAnimation(.easeIn(duration: 0.3)) { self.image = localImage }
+                return
+            }
         }
 
         // Load from URL (from server/MinIO)
@@ -292,7 +375,8 @@ struct EditProfileSheet: View {
                                     avatarUrl: auctionService.currentUser.avatarUrl,
                                     displayName: auctionService.currentUser.displayName,
                                     size: 80,
-                                    isCurrentUser: true
+                                    isCurrentUser: true,
+                                    userId: auctionService.currentUser.id
                                 )
                             }
                             Button(L10n.changeAvatar) {

@@ -1,0 +1,94 @@
+@startuml ArtSphere_Sequence_PlaceBid
+' ============================================================
+' ArtSphere Auction — Диаграмма последовательности
+' Сценарий: размещение ставки на аукцион
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam sequence {
+    ArrowColor #2E2E2E
+    ActorBorderColor #2E2E2E
+    LifeLineBorderColor #6C7A96
+    LifeLineBackgroundColor #F6F8FC
+    ParticipantBackgroundColor #FDFDFD
+    ParticipantBorderColor #2E2E2E
+    ParticipantFontName "Times New Roman"
+    GroupBackgroundColor #F4F7FC
+    GroupBorderColor #6C7A96
+}
+
+actor "Пользователь" as U
+participant "ArtworkDetailView\n«Карточка\nпроизведения»" as V
+participant "AuctionViewModel" as VM
+participant "AuctionService" as AS
+participant "NetworkService" as Net
+participant "BidQueueService\n«Очередь\nофлайн-ставок»" as BQ
+participant "WebSocketService" as WS
+participant "BidController\n«Сервер: контроллер\nставок»" as BC
+database "PostgreSQL" as DB
+participant "WebSocketHub\n«Концентратор»" as Hub
+
+== Инициирование ставки ==
+U  -> V  : нажать «Сделать ставку»
+V  -> VM : placeBid(сумма)
+VM -> AS : сделатьСтавку(idАукциона, сумма)
+
+== Онлайн-сценарий ==
+alt Сеть доступна
+    AS -> Net : POST /api/v1/bids\n{auctionId, amount}
+    Net -> BC : HTTP-запрос\n+ JWT
+    BC  -> BC : валидация:\n сумма > currentBid + bidStep
+    alt Валидация прошла
+        BC  -> DB : INSERT bid,\nUPDATE auctions.current_bid
+        DB  --> BC : OK
+        BC  -> Hub : опубликовать\nсобытие bid.placed
+        Hub --> WS : push: bid.placed\n(всем подписчикам)
+        BC  --> Net : 201 Created\n{ bid }
+        Net --> AS  : Bid
+        AS  --> VM  : Bid
+        VM  --> V   : обновить UI
+        V   --> U   : «Ставка принята»
+    else Валидация провалена (сумма < минимума)
+        BC  --> Net : 400 Bad Request\n{error: "bid_too_low"}
+        Net --> AS  : APIError
+        AS  --> VM  : APIError
+        VM  --> V   : показать ошибку
+        V   --> U   : «Ставка слишком низкая»
+    end
+
+== Офлайн-сценарий ==
+else Сеть недоступна
+    AS  -> BQ  : добавитьВОчередь(bid)
+    BQ  -> BQ  : сохранить\nв pendingBids
+    BQ  --> AS : поставлено\nв очередь
+    AS  --> VM : BidPending
+    VM  --> V  : обновить UI\n(метка «офлайн»)
+    V   --> U  : «Ставка сохранена,\nбудет отправлена позже»
+
+    ... сеть восстановлена (NWPathMonitor) ...
+
+    BQ -> Net : POST /api/v1/sync/bids\n[...pendingBids]
+    Net -> BC : пакетная\nсинхронизация
+    BC  -> DB : INSERT bids\n(synced = true)
+    DB  --> BC : OK
+    BC  -> Hub : опубликовать\nсобытия bid.placed
+    Hub --> WS : push: bid.placed
+    BC  --> Net : 200 OK\n[результаты]
+    Net --> BQ  : очистить\nочередь
+end
+
+== Получение уведомлений о перебитии ==
+note over WS, Hub
+  Параллельно: участники аукциона
+  получают push-уведомления
+  через WebSocket-канал и APNs
+end note
+WS -> VM : onEvent(bid.placed)
+VM -> V  : обновить текущую ставку
+V  -> U  : анимация «новая ставка»
+
+@enduml

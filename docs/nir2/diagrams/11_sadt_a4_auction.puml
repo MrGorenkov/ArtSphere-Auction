@@ -1,0 +1,51 @@
+@startuml ArtSphere_SADT_A4
+' ============================================================
+' ArtSphere Auction — Декомпозиция A4 «Участие в аукционе»
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam rectangle {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+}
+skinparam arrowColor #2E2E2E
+skinparam arrowFontSize 10
+
+rectangle "**A4.1**\nПросмотр\nдетальной\nинформации\nо произведении" as A41
+rectangle "**A4.2**\nПереключение\nрежима\nпросмотра\n(2D / 3D /\nкарта сложности)" as A42
+rectangle "**A4.3**\nРазмещение\nставки\n(онлайн / офлайн)" as A43
+rectangle "**A4.4**\nСинхронизация\nотложенных\nставок" as A44
+rectangle "**A4.5**\nПросмотр истории\nставок\nи таймера" as A45
+rectangle "**A4.6**\nПолучение\nуведомлений\nв реальном\nвремени" as A46
+
+A41 -right-> A42
+A42 -right-> A43
+A43 -down-> A44 : нет сети
+A44 -left-> A45 : статус\nсинхронизации
+A43 -down-> A45 : подтверждение\nсервера
+A45 -right-> A46
+
+' ==== Входы ====
+rectangle "Идентификатор\nаукциона,\nсумма ставки" as IIn1
+IIn1 -right-> A41
+
+' ==== Выходы ====
+rectangle "Статус ставки,\nобновлённая\nцена, история" as IOut1
+A46 -right-> IOut1
+
+' ==== Управление ====
+rectangle "Правила аукциона:\nшаг, резерв,\nвремя окончания" as ICtrl
+ICtrl -down-> A43
+
+' ==== Механизмы ====
+rectangle "SceneKit (3D),\nWebSocketService,\nBidQueueService,\nNWPathMonitor" as IMech
+IMech -up-> A42
+IMech -up-> A43
+IMech -up-> A44
+
+@enduml

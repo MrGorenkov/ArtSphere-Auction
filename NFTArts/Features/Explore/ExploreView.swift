@@ -4,30 +4,86 @@ struct ExploreView: View {
     @EnvironmentObject var auctionService: AuctionService
     @EnvironmentObject var lang: LanguageManager
     @State private var searchText = ""
+    @State private var sortMode: SortMode = .recent
+    @State private var statusFilter: StatusFilter = .all
+
+    enum SortMode: CaseIterable, Identifiable {
+        case recent, highestBid, mostBids, endingSoon
+        var id: Self { self }
+        var label: String {
+            switch self {
+            case .recent:      return L10n.sortRecent
+            case .highestBid:  return L10n.sortHighestBid
+            case .mostBids:    return L10n.sortMostBids
+            case .endingSoon:  return L10n.sortEndingSoon
+            }
+        }
+        var icon: String {
+            switch self {
+            case .recent:      return "clock"
+            case .highestBid:  return "arrow.up.circle"
+            case .mostBids:    return "flame"
+            case .endingSoon:  return "hourglass"
+            }
+        }
+    }
+
+    enum StatusFilter: CaseIterable, Identifiable {
+        case all, active, upcoming, sold
+        var id: Self { self }
+        var label: String {
+            switch self {
+            case .all:      return L10n.filterAll
+            case .active:   return L10n.active
+            case .upcoming: return L10n.upcoming
+            case .sold:     return L10n.sold
+            }
+        }
+        func matches(_ auction: Auction) -> Bool {
+            switch self {
+            case .all:      return true
+            case .active:   return auction.status == .active
+            case .upcoming: return auction.status == .upcoming
+            case .sold:     return auction.status == .sold
+            }
+        }
+    }
 
     private var categories: [NFTArtwork.ArtworkCategory] {
         NFTArtwork.ArtworkCategory.allCases
     }
 
     private var filteredAuctions: [Auction] {
-        if searchText.isEmpty {
-            return auctionService.auctions
+        var result = auctionService.auctions.filter { statusFilter.matches($0) }
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.artwork.title.localizedCaseInsensitiveContains(searchText) ||
+                $0.artwork.artistName.localizedCaseInsensitiveContains(searchText)
+            }
         }
-        return auctionService.auctions.filter {
-            $0.artwork.title.localizedCaseInsensitiveContains(searchText) ||
-            $0.artwork.artistName.localizedCaseInsensitiveContains(searchText)
+        switch sortMode {
+        case .recent:
+            result.sort { $0.startTime > $1.startTime }
+        case .highestBid:
+            result.sort { $0.currentBid > $1.currentBid }
+        case .mostBids:
+            result.sort { $0.bidCount > $1.bidCount }
+        case .endingSoon:
+            result.sort { $0.timeRemaining < $1.timeRemaining }
         }
+        return result
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    if searchText.isEmpty {
+                    if searchText.isEmpty && statusFilter == .all && sortMode == .recent {
                         categoriesSection
                         trendingSection
                         recentBidsSection
                     } else {
+                        activeFiltersChips
                         searchResults
                     }
                 }
@@ -35,6 +91,64 @@ struct ExploreView: View {
             }
             .navigationTitle(L10n.exploreTitle)
             .searchable(text: $searchText, prompt: L10n.searchArtistsArtworks)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    sortFilterMenu
+                }
+            }
+        }
+    }
+
+    private var sortFilterMenu: some View {
+        Menu {
+            Picker(L10n.sortBy, selection: $sortMode) {
+                ForEach(SortMode.allCases) { mode in
+                    Label(mode.label, systemImage: mode.icon).tag(mode)
+                }
+            }
+            Picker(L10n.filterStatus, selection: $statusFilter) {
+                ForEach(StatusFilter.allCases) { f in
+                    Text(f.label).tag(f)
+                }
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 18, weight: .semibold))
+        }
+    }
+
+    @ViewBuilder
+    private var activeFiltersChips: some View {
+        let chips: [String] = [
+            statusFilter == .all ? nil : "\(L10n.filterStatus): \(statusFilter.label)",
+            sortMode == .recent ? nil : "\(L10n.sortBy): \(sortMode.label)"
+        ].compactMap { $0 }
+
+        if !chips.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(chips, id: \.self) { chip in
+                        Text(chip)
+                            .font(NFTTypography.caption)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.nftPurple.opacity(0.15))
+                            .foregroundStyle(.nftPurple)
+                            .clipShape(Capsule())
+                    }
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            statusFilter = .all
+                            sortMode = .recent
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal)
+            }
         }
     }
 

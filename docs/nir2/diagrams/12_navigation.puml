@@ -1,0 +1,81 @@
+@startuml ArtSphere_Navigation
+' ============================================================
+' ArtSphere Auction — Навигационная модель iOS-приложения
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam state {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+    FontSize 12
+    ArrowColor #3D3D3D
+    StartColor #2E2E2E
+    EndColor #2E2E2E
+}
+skinparam nodesep 35
+skinparam ranksep 55
+
+[*] --> LaunchScreen : запуск\nприложения
+state "Экран запуска\n«LaunchScreen»" as LaunchScreen
+LaunchScreen --> AuthCheck : инициализация
+
+state "Проверка токена\nв Keychain" as AuthCheck <<choice>>
+AuthCheck --> LoginView : токен\nотсутствует
+AuthCheck --> MainTabView : токен\nвалиден
+
+state "Экран аутентификации\n«LoginView»" as LoginView {
+    state "Вход" as LoginForm
+    state "Регистрация" as RegisterForm
+    LoginForm -right-> RegisterForm : «Регистрация»
+    RegisterForm -left-> LoginForm : «Вход»
+}
+LoginView --> MainTabView : успешный вход /\nрегистрация
+
+state "Основная навигация\n«MainTabView»" as MainTabView {
+    state "Лента\n«FeedView»" as TabFeed
+    state "Сообщения\n«MessagesView»" as TabMessages
+    state "Создать\n«CreateNFTView»" as TabCreate
+    state "Коллекция\n«MyCollectionView»" as TabCollection
+    state "Профиль\n«ProfileView»" as TabProfile
+    [*] --> TabFeed
+}
+
+state "Детальная карточка\n«ArtworkDetailView»" as Detail {
+    state "Режим 2D" as Mode2D
+    state "Режим 3D\n(SceneKit +\nкарты нормалей)" as Mode3D
+    state "Полноэкранный\n3D-просмотр\n«FullScreen3DViewer»" as Fullscreen
+    Mode2D --> Mode3D : «3D»
+    Mode3D --> Mode2D : «2D»
+    Mode3D --> Fullscreen : повторный\nтап
+    Fullscreen --> Mode3D : закрытие
+}
+
+state "Детали коллекции\n«CollectionDetailView»" as CollDetail
+state "Мастер создания NFT\n«CreateNFTView»" as CreateFlow {
+    state "Шаг 1:\nвыбор изображения" as S1
+    state "Шаг 2:\n3D-превью" as S2
+    state "Шаг 3:\nметаданные\nи параметры" as S3
+    [*] --> S1
+    S1 --> S2
+    S2 --> S3
+}
+state "Редактирование\nпрофиля\n«EditProfileView»" as EditProfile
+state "Экран чата\n«ChatView»" as ChatView
+state "Уведомления\n«NotificationsView»" as NotificationsView
+
+TabFeed --> Detail         : тап по карточке
+TabCollection --> CollDetail : открытие\nколлекции
+CollDetail --> Detail      : тап по работе
+TabCreate --> CreateFlow   : открытие\nмастера
+TabProfile --> EditProfile : «Редактировать»
+TabProfile --> NotificationsView : иконка\nуведомлений
+TabMessages --> ChatView   : выбор\nдиалога
+
+TabProfile --> LoginView   : «Выйти»
+
+@enduml

@@ -73,8 +73,8 @@ final class MetricsService {
         record(category: "interaction", name: "bid_placed", value: amount, unit: "ETH", metadata: ["auction_id": auctionId])
     }
 
-    func trackARPlacement(surface: String) {
-        record(category: "ar_performance", name: "artwork_placed", value: 1, unit: "count", metadata: ["surface": surface])
+    func trackShowroomEnter(artworkCount: Int) {
+        record(category: "interaction", name: "showroom_open", value: Double(artworkCount), unit: "count")
     }
 
     // MARK: - Export

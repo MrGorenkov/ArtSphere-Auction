@@ -1,0 +1,140 @@
+@startuml ArtSphere_UseCase
+' ============================================================
+' ArtSphere Auction — Диаграмма вариантов использования
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam packageStyle rectangle
+skinparam usecase {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+    FontSize 12
+}
+skinparam actor {
+    BackgroundColor #F4F7FC
+    BorderColor #2E2E2E
+}
+skinparam package {
+    BackgroundColor #F6F8FC
+    BorderColor #6C7A96
+}
+skinparam arrowColor #3D3D3D
+
+left to right direction
+
+actor "Гость" as Guest
+actor "Покупатель" as Buyer
+actor "Автор" as Artist
+actor "Администратор" as Admin
+actor "Платёжный шлюз" as Payment <<внешняя\nсистема>>
+actor "Push-сервис APNs" as APNs <<внешняя\nсистема>>
+
+Buyer  --|> Guest
+Artist --|> Buyer
+Admin  --|> Artist
+
+rectangle "Система ArtSphere Auction" {
+
+    package "Аутентификация" {
+        usecase "Регистрация" as UC_Reg
+        usecase "Вход в систему" as UC_Login
+        usecase "Выход" as UC_Logout
+        usecase "Редактирование\nпрофиля" as UC_EditProfile
+    }
+
+    package "Просмотр каталога" {
+        usecase "Просмотр ленты\nпроизведений" as UC_Feed
+        usecase "Просмотр\nдетальной карточки" as UC_Detail
+        usecase "Просмотр 3D-модели" as UC_View3D
+        usecase "Полноэкранный\n3D-просмотр" as UC_View3DFull
+        usecase "Поиск и фильтрация" as UC_Search
+    }
+
+    package "Аукцион" {
+        usecase "Размещение ставки" as UC_Bid
+        usecase "Покупка\nпо фиксированной цене" as UC_BuyNow
+        usecase "Просмотр истории\nставок" as UC_BidHistory
+        usecase "Офлайн-ставка\nс отложенной\nсинхронизацией" as UC_OfflineBid
+        usecase "Получение\nуведомлений" as UC_Notify
+    }
+
+    package "Социальные функции" {
+        usecase "Лайк произведения" as UC_Like
+        usecase "Комментирование" as UC_Comment
+        usecase "Подписка на автора" as UC_Follow
+        usecase "Обмен сообщениями" as UC_Message
+    }
+
+    package "Коллекционирование" {
+        usecase "Создание коллекции" as UC_CreateColl
+        usecase "Добавление работы\nв коллекцию" as UC_AddToColl
+        usecase "Управление\nколлекциями" as UC_ManageColl
+    }
+
+    package "Создание и публикация" {
+        usecase "Загрузка\nпроизведения" as UC_Upload
+        usecase "Загрузка\n3D-модели" as UC_Upload3D
+        usecase "Выставление\nна аукцион" as UC_ListAuction
+        usecase "Минтинг NFT" as UC_Mint
+    }
+
+    package "Администрирование" {
+        usecase "Модерация\nконтента" as UC_Moderate
+        usecase "Управление\nпользователями" as UC_ManageUsers
+        usecase "Просмотр\nаналитики" as UC_Analytics
+    }
+}
+
+' ===== Гость =====
+Guest --> UC_Reg
+Guest --> UC_Login
+Guest --> UC_Feed
+Guest --> UC_Detail
+Guest --> UC_Search
+
+' ===== Покупатель =====
+Buyer --> UC_Logout
+Buyer --> UC_EditProfile
+Buyer --> UC_View3D
+Buyer --> UC_View3DFull
+Buyer --> UC_Bid
+Buyer --> UC_BuyNow
+Buyer --> UC_BidHistory
+Buyer --> UC_Notify
+Buyer --> UC_Like
+Buyer --> UC_Comment
+Buyer --> UC_Follow
+Buyer --> UC_Message
+Buyer --> UC_CreateColl
+Buyer --> UC_AddToColl
+Buyer --> UC_ManageColl
+
+' ===== Автор =====
+Artist --> UC_Upload
+Artist --> UC_Upload3D
+Artist --> UC_ListAuction
+Artist --> UC_Mint
+
+' ===== Администратор =====
+Admin --> UC_Moderate
+Admin --> UC_ManageUsers
+Admin --> UC_Analytics
+
+' ===== Внешние системы =====
+UC_BuyNow ..> Payment : <<include>>
+UC_Bid    ..> Payment : <<include>>
+UC_Notify ..> APNs    : <<include>>
+
+' ===== Включения и расширения =====
+UC_Bid     ..> UC_OfflineBid : <<extend>>\n  нет сети
+UC_Detail  ..> UC_View3D     : <<extend>>
+UC_View3D  ..> UC_View3DFull : <<extend>>
+UC_Upload  ..> UC_Upload3D   : <<include>>
+UC_ListAuction ..> UC_Mint   : <<include>>
+
+@enduml

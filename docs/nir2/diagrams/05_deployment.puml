@@ -1,0 +1,116 @@
+@startuml ArtSphere_Deployment
+' ============================================================
+' ArtSphere Auction — Диаграмма развёртывания
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam node {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    FontName "Times New Roman"
+}
+skinparam artifact {
+    BackgroundColor #FFF8E8
+    BorderColor #7A6A2A
+}
+skinparam database {
+    BackgroundColor #F0F4FA
+    BorderColor #2E2E2E
+}
+skinparam cloud {
+    BackgroundColor #F4F7FC
+    BorderColor #6C7A96
+}
+skinparam arrowColor #3D3D3D
+skinparam nodesep 40
+skinparam ranksep 60
+
+' ============================================================
+' Клиентская сторона
+' ============================================================
+node "Устройство пользователя\n«iPhone (iOS 16+)»" as iPhone {
+    artifact "NFTArts.app\n«iOS-приложение»" as App
+    artifact "Keychain\n«Хранилище\nтокена JWT»" as KC
+    artifact "Локальная ФС\n«Аватар, кэш»" as FS
+    node "SceneKit\n«3D-подсистема»" as SK
+}
+
+' ============================================================
+' Серверная инфраструктура (Docker Compose)
+' ============================================================
+node "Сервер приложений\n«Docker host»" as Server {
+
+    node "Контейнер «api»\n«Vapor 4 / Swift»" as ApiNode {
+        artifact "NFTArtsAPI\n«REST + WebSocket»" as Api
+        artifact "JWT-модуль\n«Аутентификация»" as JWT
+        artifact "Fluent ORM" as Fluent
+    }
+
+    node "Контейнер «db»\n«PostgreSQL 16»" as DbNode {
+        database "База данных\nnftarts_db" as DB
+    }
+
+    node "Контейнер «minio»\n«MinIO S3»" as MinioNode {
+        artifact "Bucket:\nartworks" as Bart
+        artifact "Bucket:\nmodels-3d" as Bmod
+        artifact "Bucket:\navatars" as Bav
+    }
+
+    node "Контейнер «pgadmin»\n«pgAdmin 4»" as PgAdmin {
+        artifact "Веб-интерфейс\nСУБД" as PgUI
+    }
+}
+
+' ============================================================
+' Внешние сервисы
+' ============================================================
+cloud "Apple Push\nNotification Service\n«APNs»" as APNs
+cloud "Ethereum / Polygon\n«Блокчейн-сеть»" as BC
+
+' ============================================================
+' Связи: клиент → сервер
+' ============================================================
+App -right-> Api   : HTTPS REST\n«TCP 8080»
+App -right-> Api   : WebSocket\n«ws://»
+App --> KC         : чтение/запись\nтокена
+App --> FS         : аватар,\nкэш
+App --> SK         : рендер 3D
+
+' ============================================================
+' Связи внутри сервера
+' ============================================================
+Api --> JWT
+Api --> Fluent
+Fluent --> DB      : SQL\n«порт 5432»
+Api --> Bart       : S3 API\n«порт 9000»
+Api --> Bmod       : S3 API
+Api --> Bav        : S3 API
+PgUI --> DB        : административный\nдоступ
+
+' ============================================================
+' Связи с внешними системами
+' ============================================================
+Api   --> APNs     : push-уведомления\n«HTTP/2»
+App   <-- APNs     : доставка\nуведомлений
+Api   ..> BC       : mint / transfer\nNFT-токена
+
+note right of Server
+  Компоненты развёртываются через
+  **docker compose up -d --build**.
+  Внутренняя сеть: bridge.
+  Внешние порты: 8080 (API),
+  9000/9001 (MinIO), 5050 (pgAdmin).
+end note
+
+note left of iPhone
+  Минимальная версия iOS 16.0.
+  Подписано сертификатом
+  Apple Development
+  (Team ID 27LYLK4WV8).
+end note
+
+@enduml

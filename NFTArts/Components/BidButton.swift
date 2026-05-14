@@ -9,6 +9,7 @@ struct BidButton: View {
 
     var body: some View {
         Button {
+            HapticService.medium()
             showBidSheet = true
         } label: {
             HStack(spacing: 6) {
@@ -198,6 +199,7 @@ struct PlaceBidSheet: View {
 
     private func quickBidButton(amount: Double) -> some View {
         Button {
+            HapticService.tap()
             bidAmount = String(format: "%.2f", amount)
         } label: {
             Text(String(format: "%.2f", amount))
@@ -216,9 +218,11 @@ struct PlaceBidSheet: View {
         let result = auctionService.placeBid(on: auction.id, amount: amount)
         switch result {
         case .success(let bid):
+            HapticService.success()
             placedBid = bid
             showConfirmation = true
         case .failure(let message):
+            HapticService.error()
             errorMessage = message
             showError = true
         }

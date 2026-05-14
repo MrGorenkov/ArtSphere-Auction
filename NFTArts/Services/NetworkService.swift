@@ -4,11 +4,21 @@ import Foundation
 
 enum APIConfig {
     static var baseURL: String {
-        #if DEBUG
-        return "https://artsphere-auction-production.up.railway.app/api/v1"
+        #if targetEnvironment(simulator)
+        // Simulator shares localhost with the host machine.
+        return "http://localhost:8080/api/v1"
         #else
-        return "https://artsphere-auction-production.up.railway.app/api/v1"
+        // Physical device on the same Wi-Fi as the host running docker compose.
+        return "http://192.168.1.67:8080/api/v1"
         #endif
+    }
+
+    /// WebSocket endpoint, derived from `baseURL` (swap http→ws and drop /api/v1 suffix).
+    static var webSocketURL: String {
+        baseURL
+            .replacingOccurrences(of: "http://", with: "ws://")
+            .replacingOccurrences(of: "https://", with: "wss://")
+            .replacingOccurrences(of: "/api/v1", with: "/ws")
     }
 
     static let timeout: TimeInterval = 30
@@ -418,6 +428,24 @@ struct APIAuction: Codable, Identifiable {
     let winnerId: String?
     let creatorId: String?
     let bidCount: Int
+    let buyNowPrice: Double?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        artworkId = try c.decode(String.self, forKey: .artworkId)
+        startTime = try c.decode(String.self, forKey: .startTime)
+        endTime = try c.decode(String.self, forKey: .endTime)
+        currentBid = try c.decode(Double.self, forKey: .currentBid)
+        startingPrice = try c.decode(Double.self, forKey: .startingPrice)
+        reservePrice = try c.decodeIfPresent(Double.self, forKey: .reservePrice)
+        bidStep = try c.decode(Double.self, forKey: .bidStep)
+        status = try c.decode(String.self, forKey: .status)
+        winnerId = try c.decodeIfPresent(String.self, forKey: .winnerId)
+        creatorId = try c.decodeIfPresent(String.self, forKey: .creatorId)
+        bidCount = try c.decode(Int.self, forKey: .bidCount)
+        buyNowPrice = try c.decodeIfPresent(Double.self, forKey: .buyNowPrice)
+    }
 }
 
 struct APIAuctionDetail: Codable {
@@ -580,6 +608,16 @@ struct APICreateAuctionRequest: Codable {
     let reservePrice: Double?
     let bidStep: Double
     let durationHours: Int
+    let buyNowPrice: Double?
+}
+
+struct APIBuyNowRequest: Codable {
+    let auctionId: String
+}
+
+struct APIAutoBrokerRequest: Codable {
+    let auctionId: String
+    let maxAmount: Double
 }
 
 struct APICreateCollectionRequest: Codable {
@@ -656,6 +694,14 @@ extension NetworkService {
 
     func fetchBids(auctionId: String) async throws -> [APIBid] {
         try await request(endpoint: "auctions/\(auctionId)/bids")
+    }
+
+    func buyNow(auctionId: String) async throws -> APIAuction {
+        try await request(endpoint: "auctions/\(auctionId)/buy-now", method: .post, body: APIBuyNowRequest(auctionId: auctionId))
+    }
+
+    func setAutoBroker(auctionId: String, maxAmount: Double) async throws -> APIBid {
+        try await request(endpoint: "auctions/\(auctionId)/auto-broker", method: .post, body: APIAutoBrokerRequest(auctionId: auctionId, maxAmount: maxAmount))
     }
 
     // MARK: User

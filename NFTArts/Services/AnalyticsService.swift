@@ -17,10 +17,8 @@ enum AnalyticsEvent: String {
     case nftCreated = "nft_created"
     case imageUploaded = "image_uploaded"
 
-    // 3D / AR
+    // 3D
     case view3D = "view_3d"
-    case viewAR = "view_ar"
-    case arPlaced = "ar_artwork_placed"
 
     // Navigation
     case screenView = "screen_view"
@@ -35,6 +33,9 @@ enum AnalyticsEvent: String {
     // Profile
     case profileEdited = "profile_edited"
     case avatarUploaded = "avatar_uploaded"
+
+    // Showroom
+    case showroomOpened = "showroom_opened"
 }
 
 /// Centralized analytics service.
@@ -113,13 +114,6 @@ final class AnalyticsService {
             "title": title,
             "category": category,
             "starting_price": startingPrice
-        ])
-    }
-
-    func trackAR(artworkId: String, artworkTitle: String) {
-        track(.viewAR, parameters: [
-            "artwork_id": artworkId,
-            "artwork_title": artworkTitle
         ])
     }
 

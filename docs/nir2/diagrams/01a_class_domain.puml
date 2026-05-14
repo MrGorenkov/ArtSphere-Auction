@@ -1,0 +1,166 @@
+@startuml ArtSphere_DomainModel
+' ============================================================
+' ArtSphere Auction — Диаграмма классов (предметная модель)
+' ============================================================
+
+skinparam backgroundColor #FFFFFF
+skinparam classFontName "Times New Roman"
+skinparam classFontSize 12
+skinparam defaultFontName "Times New Roman"
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam class {
+    BackgroundColor #FDFDFD
+    BorderColor #2E2E2E
+    ArrowColor #2E2E2E
+    HeaderBackgroundColor #E8EEF7
+}
+skinparam enum {
+    BackgroundColor #FFF8E8
+    BorderColor #7A6A2A
+    HeaderBackgroundColor #F4E3B0
+}
+skinparam package {
+    BackgroundColor #F6F8FC
+    BorderColor #6C7A96
+}
+hide empty members
+skinparam nodesep 45
+skinparam ranksep 60
+
+package "Предметная модель" <<Frame>> {
+
+    class User <<Пользователь>> {
+        +id : UUID
+        +username : Имя_пользователя
+        +displayName : Отображаемое_имя
+        +walletAddress : Адрес_кошелька
+        +avatarUrl : URL_аватара
+        +bio : Описание_профиля
+        +balance : Баланс_ETH
+        --
+        +форматированныйКошелёк() : String
+        +форматированныйБаланс() : String
+    }
+
+    class NFTCollection <<Коллекция>> {
+        +id : UUID
+        +name : Название
+        +description : Описание
+        +coverImageArtworkId : Обложка
+        +isDefault : По_умолчанию
+        +createdAt : Дата_создания
+        +updatedAt : Дата_обновления
+        --
+        +количествоРабот() : Int
+    }
+
+    class NFTArtwork <<Произведение>> {
+        +id : UUID
+        +title : Название
+        +artistName : Имя_автора
+        +description : Описание
+        +category : Категория
+        +createdAt : Дата_создания
+        +tokenId : Идентификатор_токена
+        +contractAddress : Адрес_контракта
+        +blockchain : Блокчейн_сеть
+        +imageURL : URL_изображения
+        +modelUrl : URL_3D_модели
+        +textureComplexityScore : Сложность_текстуры
+        --
+        +доступноВ3D() : Bool
+    }
+
+    class Auction <<Аукцион>> {
+        +id : UUID
+        +startTime : Дата_старта
+        +endTime : Дата_окончания
+        +currentBid : Текущая_ставка
+        +startingPrice : Стартовая_цена
+        +reservePrice : Резервная_цена
+        +buyNowPrice : Цена_быстрой_покупки
+        +bidStep : Шаг_ставки
+        +status : Статус
+        +winnerId : Идентификатор_победителя
+        --
+        +активен() : Bool
+        +завершён() : Bool
+        +минимальнаяСледующаяСтавка() : Double
+        +резервДостигнут() : Bool
+    }
+
+    class Bid <<Ставка>> {
+        +id : UUID
+        +userId : Идентификатор_пользователя
+        +userName : Имя_пользователя
+        +amount : Сумма_ставки
+        +timestamp : Временная_метка
+        +synced : Синхронизирована
+        --
+        +форматированнаяСумма() : String
+    }
+
+    class Notification <<Уведомление>> {
+        +id : UUID
+        +type : Тип_уведомления
+        +title : Заголовок
+        +message : Сообщение
+        +createdAt : Дата_создания
+        +isRead : Прочитано
+        +relatedAuctionId : Связанный_аукцион
+    }
+
+    enum ArtworkCategory <<Категория>> {
+        Цифровая_живопись
+        Генеративное_искусство
+        Фотография
+        Абстракция
+        Пиксель_арт
+        Трёхмерное_искусство
+    }
+
+    enum BlockchainNetwork <<Блокчейн_сеть>> {
+        Ethereum
+        Polygon
+    }
+
+    enum ImageSource <<Источник_изображения>> {
+        Процедурный
+        Загруженный
+        По_URL
+        Встроенный
+    }
+
+    enum AuctionStatus <<Статус_аукциона>> {
+        Ожидает_начала
+        Активен
+        Завершён
+        Продан
+    }
+
+    enum NotificationType <<Тип_уведомления>> {
+        Ставка_размещена
+        Перебита_ставка
+        Аукцион_выигран
+        Новое_произведение
+    }
+}
+
+' Связи
+User "1" *-- "0..*" NFTCollection : владеет
+User "1" --> "0..*" NFTArtwork : создаёт
+User "1" --> "0..*" Bid : размещает
+User "1" --> "0..*" Notification : получает
+NFTCollection "*" --> "*" NFTArtwork : содержит
+NFTArtwork "1" --> "0..1" Auction : выставлено на
+Auction "1" *-- "0..*" Bid : принимает
+Auction "1" ..> "0..1" User : победитель
+
+NFTArtwork ..> ArtworkCategory
+NFTArtwork ..> BlockchainNetwork
+NFTArtwork ..> ImageSource
+Auction ..> AuctionStatus
+Notification ..> NotificationType
+
+@enduml

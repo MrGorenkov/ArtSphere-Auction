@@ -1,246 +1,105 @@
-# NFT Arts — Аукцион картин с 3D визуализацией
+# ArtSphere Auction
 
+iOS-приложение для аукционов цифровых произведений искусства с интерактивной 3D-визуализацией, реализованной на основе алгоритма Собеля и виртуального шоурума в стиле классической галереи.
 
+<p align="center">
+  <img src="https://img.shields.io/badge/iOS-16.0+-blue.svg" alt="iOS 16+">
+  <img src="https://img.shields.io/badge/Swift-5.9-orange.svg" alt="Swift 5.9">
+  <img src="https://img.shields.io/badge/SwiftUI-✓-1F77B4.svg" alt="SwiftUI">
+  <img src="https://img.shields.io/badge/SceneKit-✓-9333EA.svg" alt="SceneKit">
+  <img src="https://img.shields.io/badge/Vapor-4-purple.svg" alt="Vapor 4">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-336791.svg" alt="PostgreSQL 16">
+  <img src="https://img.shields.io/badge/MinIO-S3-C72E49.svg" alt="MinIO">
+</p>
+
+Дипломный проект (МГТУ им. Н.Э. Баумана, кафедра ИУ-5, 2026). Автор: Горенков А. А.
+
+---
+
+## Содержание
+
+- [Ключевые возможности](#ключевые-возможности)
+- [Архитектура](#архитектура)
+- [Технологический стек](#технологический-стек)
+- [Структура проекта](#структура-проекта)
+- [Запуск](#запуск)
+- [API](#api)
+- [База данных](#база-данных)
+- [Научная новизна](#научная-новизна)
+- [Документация](#документация)
+
+---
+
+## Ключевые возможности
+
+### Для пользователя
+
+- **Лента аукционов** с параллакс-карточками, поиском, фильтрацией по категориям и подборкой популярного.
+- **Просмотр произведений в 3D**: автоматическая генерация карт нормалей и карт смещений из 2D-изображения средствами фильтра Собеля + SIMD-векторизация Accelerate. SceneKit рендерит реалистичный рельеф мазков с физически корректным освещением.
+- **Тепловая карта сложности** — визуализация градиента детализации произведения в цветовой схеме «синий → жёлтый → красный».
+- **Виртуальный 3D-шоурум** в стиле классического музея: паркетный пол, беж-сэндстоуновые стены, мраморные пьедесталы с вазами, латунная люстра, индивидуальные picture lights над каждой картиной. Три режима освещения (галерея / день / ночь), орбитальный обзор и режим прогулки. Пользователь может произвольно расставлять произведения по стенам — расстановка сохраняется.
+- **Аукционы в реальном времени** с уведомлениями по WebSocket, оптимистическим UI, автоматическим брокером и блиц-ценой.
+- **Офлайн-режим**: ставки складываются в локальную очередь с экспоненциальным backoff и автоматически синхронизируются при появлении сети.
+- **Создание собственных NFT** с трёхмерным предпросмотром перед публикацией.
+- **Управление коллекциями**, профили пользователей, подписки, комментарии, чат.
+
+### Для администратора (macOS)
+
+- Сводный дашборд со статистикой системы.
+- Управление пользователями (поиск, блокировка, удаление).
+- Управление произведениями (фильтрация, публикация, скрытие, удаление).
+- Управление аукционами с историей ставок и возможностью отмены.
 
 ---
 
 ## Архитектура
 
 ```
-┌─────────────────┐      REST API / WebSocket      ┌──────────────────┐
-│   iOS App       │  ◄──────────────────────────►   │  Vapor Backend   │
-│   (SwiftUI)     │       :8080                     │  (Swift 5.9)     │
-└─────────────────┘                                 └────────┬─────────┘
+┌──────────────────┐       REST + WebSocket       ┌─────────────────────┐
+│   iOS клиент     │  ◄────────────────────────►  │  Vapor API (Swift)  │
+│   SwiftUI +      │           :8080              │  + Fluent ORM       │
+│   SceneKit       │                              │  + JWT (HS256)      │
+└──────────────────┘                              └──────────┬──────────┘
                                                              │
-                                                    ┌────────┼─────────┐
-                                                    │        │         │
-                                               ┌────▼───┐ ┌─▼──────┐ ┌▼────────┐
-                                               │ Postgre│ │ MinIO  │ │ pgAdmin │
-                                               │ SQL 16 │ │ (S3)   │ │         │
-                                               │  :5432 │ │ :9000  │ │  :5050  │
-                                               └────────┘ └────────┘ └─────────┘
+                                          ┌──────────────────┼──────────────────┐
+                                          ▼                  ▼                  ▼
+                                  ┌──────────────┐  ┌────────────────┐  ┌──────────────┐
+                                  │ PostgreSQL16 │  │  MinIO (S3)    │  │   pgAdmin    │
+                                  │   :5432      │  │  :9000 / :9001 │  │    :5050     │
+                                  └──────────────┘  └────────────────┘  └──────────────┘
 ```
 
-## Технологии
-
-| Компонент | Технология |
-|-----------|-----------|
-| iOS клиент | Swift, SwiftUI, SceneKit, ARKit, RealityKit |
-| Бэкенд | Vapor 4 (Swift), Fluent ORM, JWT |
-| База данных | PostgreSQL 16 (11 сущностей ER-диаграммы) |
-| Хранилище файлов | MinIO (S3-совместимое) |
-| Real-time | WebSocket (встроенный в Vapor) |
-| Контейнеризация | Docker Compose |
-| Управление БД | pgAdmin 4 |
-| Генерация проекта | XcodeGen |
-
-## Быстрый старт
-
-### Требования
-
-- **Docker** и **Docker Compose** (v2+)
-- **Xcode 15+** (для iOS приложения)
-- **macOS 13+**
-- **iPhone** с iOS 16+ (для AR функций)
-
-### 1. Запуск серверной части
-
-```bash
-# Клонировать/открыть проект
-cd "iOS NFT-arts"
-
-# Запустить все сервисы
-docker compose up -d
-
-# Проверить статус
-docker compose ps
-```
-
-Это запустит:
-
-| Сервис | URL | Описание |
-|--------|-----|----------|
-| **PostgreSQL** | `localhost:5432` | База данных (auto-init + seed) |
-| **MinIO API** | `localhost:9000` | S3 хранилище файлов |
-| **MinIO Console** | `localhost:9001` | Веб-интерфейс MinIO |
-| **Vapor API** | `localhost:8080` | REST API + WebSocket |
-| **pgAdmin** | `localhost:5050` | Управление БД |
-
-### 2. Проверка работоспособности
-
-```bash
-# Проверить API
-curl http://localhost:8080
-
-# Ожидаемый ответ:
-# {"status":"ok","service":"NFT Arts API","version":"1.0"}
-```
-
-### 3. Сборка iOS приложения
-
-```bash
-# Установить XcodeGen (если не установлен)
-brew install xcodegen
-
-# Сгенерировать проект
-cd "iOS NFT-arts"
-xcodegen generate
-
-# Открыть в Xcode
-open NFTArts.xcodeproj
-```
-
-Далее:
-1. Выбрать ваше устройство (iPhone)
-2. Указать Team для подписи
-3. Cmd+R — запустить
+Клиент-серверная архитектура. iOS-клиент общается с бэкендом по REST API для базовых операций и по WebSocket для real-time доставки событий (ставки, статус аукциона, персональные уведомления). Серверная часть на Swift (Vapor 4 + Fluent) делит модель данных с клиентом за счёт общего языка. Изображения и USDZ-модели хранятся в S3-совместимом MinIO. JWT-токены HS256 со временем жизни 7 дней хранятся на устройстве в Keychain.
 
 ---
 
-## Учётные данные
+## Технологический стек
 
-### PostgreSQL
-```
-Host:     localhost:5432
-Database: nftarts_db
-User:     nftarts
-Password: nftarts_secret
-```
+### iOS (`NFTArts/`)
+| Компонент | Технологии |
+|---|---|
+| UI | SwiftUI, Combine |
+| 3D-рендеринг | SceneKit, PBR-материалы (diffuse + normal + displacement) |
+| Обработка изображений | Accelerate (vImage), SIMD-конволюции |
+| Сеть | URLSession (HTTP), URLSessionWebSocketTask |
+| Хранение | Keychain (токен), UserDefaults (настройки, layout шоурума) |
+| Reachability | NWPathMonitor |
+| Аналитика и метрики | собственный MetricsService |
 
-### pgAdmin
-```
-URL:      http://localhost:5050
-Email:    admin@nftarts.com
-Password: admin
-```
+### Backend (`backend/`)
+| Компонент | Технологии |
+|---|---|
+| Веб-фреймворк | Vapor 4 (Swift 5.9) |
+| ORM | Fluent + FluentPostgresDriver |
+| Авторизация | JWT (HS256, кастомный middleware) |
+| Real-time | WebSocketManager на встроенном Vapor WS |
+| Хранилище файлов | MinIO (S3 API) |
 
-### MinIO Console
-```
-URL:      http://localhost:9001
-User:     nftarts_minio
-Password: minio_secret_key
-```
-
-### Тестовый пользователь (API)
-```
-Wallet:   0x742d35Cc6634C0532925a3b844Bc9e7595f2bD01
-Password: password123
-```
-
----
-
-## API Endpoints
-
-### Аутентификация (открытые)
-```
-POST /api/v1/auth/register   — Регистрация
-POST /api/v1/auth/login      — Вход (получить JWT)
-```
-
-### Стили живописи (открытые)
-```
-GET /api/v1/styles                  — Список стилей
-GET /api/v1/styles/:id/artworks     — Работы по стилю
-```
-
-### Произведения (JWT)
-```
-GET  /api/v1/artworks               — Список (?search=, ?style_id=, ?blockchain=)
-GET  /api/v1/artworks/:id           — Детали
-POST /api/v1/artworks               — Создать
-GET  /api/v1/artworks/:id/3d        — 3D модели
-POST /api/v1/artworks/:id/upload-image — Загрузить изображение (multipart)
-```
-
-### Аукционы (JWT)
-```
-GET  /api/v1/auctions               — Список (?status=active)
-GET  /api/v1/auctions/:id           — Детали (с artwork + bids)
-POST /api/v1/auctions               — Создать
-GET  /api/v1/auctions/:id/bids      — Ставки аукциона
-```
-
-### Ставки (JWT)
-```
-POST /api/v1/bids                   — Сделать ставку
-```
-
-### Пользователь (JWT)
-```
-GET  /api/v1/users/me               — Профиль
-PUT  /api/v1/users/me               — Обновить профиль
-POST /api/v1/users/me/avatar        — Загрузить аватар (multipart)
-GET  /api/v1/users/me/stats         — Статистика
-GET  /api/v1/users/me/notifications — Уведомления
-```
-
-### Коллекции (JWT)
-```
-GET    /api/v1/collections                         — Мои коллекции
-POST   /api/v1/collections                         — Создать
-PUT    /api/v1/collections/:id                     — Обновить
-DELETE /api/v1/collections/:id                     — Удалить
-POST   /api/v1/collections/:id/artworks            — Добавить работу
-DELETE /api/v1/collections/:id/artworks/:artworkId — Убрать работу
-```
-
-### NFT Токены (JWT)
-```
-GET  /api/v1/nft          — Мои NFT
-GET  /api/v1/nft/:id      — Детали токена
-POST /api/v1/nft/mint     — Создать NFT из произведения
-```
-
-### Транзакции (JWT)
-```
-GET /api/v1/transactions       — Мои транзакции
-GET /api/v1/transactions/:id   — Детали
-```
-
-### WebSocket (real-time)
-```
-ws://localhost:8080/ws/auction/:auctionId  — Обновления аукциона (ставки)
-ws://localhost:8080/ws/user/:userId        — Персональные уведомления
-```
-
----
-
-## Структура базы данных (11 сущностей)
-
-```
-Пользователь (users)
-Стиль_Живописи (art_styles)
-Работа (artworks)
-3D_Визуализация (visualizations_3d)
-NFT_Токен (nft_tokens)
-Аукцион (auctions)
-Ставка (bids)
-Транзакция (transactions)
-Коллекция (collections)
-Коллекция_Работа (collection_artworks)
-Уведомление (notifications)
-```
-
-Дополнительные таблицы: `favorites`, `owned_artworks`, `auth_tokens`
-
----
-
-## MinIO — хранилище файлов
-
-Бакеты создаются автоматически при запуске:
-
-| Бакет | Назначение |
-|-------|-----------|
-| `artworks` | Изображения произведений |
-| `3d-models` | USDZ, GLB файлы для AR |
-| `avatars` | Аватары пользователей |
-| `files` | Исходные файлы произведений |
-
-Все бакеты доступны для чтения по прямым URL:
-```
-http://localhost:9000/artworks/filename.png
-http://localhost:9000/3d-models/model.usdz
-```
+### Инфраструктура
+- **PostgreSQL 16** — 18 таблиц, триггеры, представления, индексы.
+- **MinIO** — четыре бакета: `artworks`, `3d-models`, `avatars`, `files`.
+- **Docker Compose** — оркестрация всех сервисов одной командой.
+- **XcodeGen** — генерация Xcode-проекта из `project.yml`.
 
 ---
 
@@ -248,79 +107,200 @@ http://localhost:9000/3d-models/model.usdz
 
 ```
 iOS NFT-arts/
-├── NFTArts/                    # iOS приложение (SwiftUI)
-│   ├── App/                    # Entry point
-│   ├── Core/                   # Theme, Navigation, Localization, Extensions
-│   ├── Models/                 # NFTArtwork, Auction, User, NFTCollection
-│   ├── Services/               # AuctionService, MockDataService, NetworkService
-│   ├── Features/               # Feed, Detail, Explore, ARView, Collection, Profile, CreateNFT
-│   └── Components/             # Artwork3DView, BidButton, CountdownTimer, etc.
-├── backend/                    # Vapor API сервер
-│   ├── Sources/App/
-│   │   ├── Controllers/        # 8 контроллеров (Auth, Artwork, Auction, Bid, User, Collection, NFT, Transaction)
-│   │   ├── Models/             # 9 Fluent моделей
-│   │   ├── DTOs/               # Request/Response DTO
-│   │   ├── Services/           # MinIOService, WebSocketManager
-│   │   ├── routes.swift        # Маршруты + WebSocket
-│   │   ├── JWTAuth.swift       # JWT middleware
-│   │   └── entrypoint.swift    # Конфигурация
-│   ├── Package.swift
-│   └── Dockerfile
-├── database/
-│   ├── init.sql                # Полная схема БД (11 сущностей + триггеры + представления)
-│   └── seed.sql                # Тестовые данные (7 пользователей, 10 работ, 10 аукционов)
-├── docker-compose.yml          # PostgreSQL + MinIO + Vapor API + pgAdmin
-├── project.yml                 # XcodeGen конфигурация
+├── NFTArts/                        # iOS-приложение
+│   ├── App/                        # Entry point + AppDelegate
+│   ├── Core/                       # Тема, навигация, локализация, расширения
+│   ├── Models/                     # NFTArtwork, Auction, Bid, User, NFTCollection
+│   ├── Services/                   # AuctionService, NetworkService, WebSocketService,
+│   │                               # AuthManager, BidQueueService, ImageLoader,
+│   │                               # HapticService, AnalyticsService, MetricsService
+│   ├── Components/                 # Artwork3DView, FullScreen3DViewer,
+│   │                               # NormalMapGenerator, BidButton, SkeletonView,
+│   │                               # ErrorBanner, CountdownTimer
+│   └── Features/
+│       ├── Auth/                   # Логин и регистрация
+│       ├── Onboarding/             # Приветствие при первом запуске
+│       ├── Feed/                   # Лента аукционов
+│       ├── Explore/                # Категории, тренды, поиск
+│       ├── Detail/                 # Детали лота, 3D-просмотр, история ставок
+│       ├── CreateNFT/              # Создание собственного произведения
+│       ├── Collection/             # Коллекции пользователя
+│       ├── Showroom/               # Виртуальный 3D-шоурум (Louvre-style)
+│       ├── Profile/                # Профиль пользователя
+│       └── Messages/               # Чат
+├── NFTArtsAdmin/                   # Десктопное приложение администратора (macOS)
+├── backend/                        # Vapor API сервер
+├── database/                       # init.sql, seed.sql
+├── docs/                           # ТЗ, ПМИ, РП, НИР, схемы
+├── docker-compose.yml
+├── project.yml                     # XcodeGen
 └── README.md
 ```
 
 ---
 
-## Полезные команды
+## Запуск
+
+### Требования
+
+- macOS 13+, Xcode 16+, iOS-устройство (iPhone 11 или новее) или симулятор
+- Docker Desktop
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+
+### Серверная часть
 
 ```bash
-# Запустить все сервисы
+git clone https://github.com/MrGorenkov/ArtSphere-Auction.git
+cd "ArtSphere-Auction"
+
+# Запустить все сервисы (PostgreSQL, MinIO, Vapor API, pgAdmin)
 docker compose up -d
 
-# Остановить
-docker compose down
+# Проверить статус
+docker compose ps
+```
 
-# Пересоздать БД (сброс данных)
-docker compose down -v && docker compose up -d
+### iOS-клиент
 
-# Логи API сервера
-docker compose logs -f api
+```bash
+xcodegen generate
+open NFTArts.xcodeproj
+```
 
-# Логи БД
-docker compose logs -f db
+В Xcode выбрать целевое устройство (iPhone в той же Wi-Fi-сети, что и Mac, либо симулятор) и нажать `⌘R`.
 
-# Подключиться к БД через psql
-docker compose exec db psql -U nftarts -d nftarts_db
+> На физическом устройстве клиент обращается к серверу по локальному адресу `http://192.168.1.67:8080`. При запуске на другой сети нужно прописать актуальный IP в `NFTArts/Services/NetworkService.swift` и `NFTArts/Services/WebSocketService.swift`.
 
-# Пересобрать API после изменений
-docker compose build api && docker compose up -d api
+### Десктопное приложение администратора
+
+```bash
+xcodegen generate
+open NFTArts.xcodeproj
+# Выбрать схему NFTArtsAdmin, целевое устройство — My Mac
 ```
 
 ---
 
-## Пример: авторизация и ставка
+## API
 
-```bash
-# 1. Логин
-TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"walletAddress":"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD01","password":"password123"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+Базовый URL: `http://localhost:8080/api/v1`
 
-echo "Token: $TOKEN"
+### Авторизация
 
-# 2. Получить активные аукционы
-curl -s http://localhost:8080/api/v1/auctions?status=active \
-  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+| Метод | Эндпоинт | Описание |
+|---|---|---|
+| `POST` | `/auth/register` | Регистрация |
+| `POST` | `/auth/login` | Вход (возвращает JWT) |
 
-# 3. Сделать ставку
-curl -s -X POST http://localhost:8080/api/v1/bids \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"auctionId":"c0000001-0000-0000-0000-000000000001","amount":2.0}'
+### Произведения
+
+| Метод | Эндпоинт | Описание |
+|---|---|---|
+| `GET` | `/artworks` | Список (фильтры `search`, `style_id`, `blockchain`) |
+| `GET` | `/artworks/:id` | Детали |
+| `POST` | `/artworks` | Создание |
+| `POST` | `/artworks/:id/upload-image` | Загрузка изображения (multipart) |
+
+### Аукционы
+
+| Метод | Эндпоинт | Описание |
+|---|---|---|
+| `GET` | `/auctions` | Список (фильтр `status`) |
+| `GET` | `/auctions/:id` | Детали с artwork и ставками |
+| `POST` | `/auctions` | Создание |
+| `POST` | `/auctions/:id/buy-now` | Покупка по блиц-цене |
+| `POST` | `/auctions/:id/auto-broker` | Установка автоматического брокера |
+
+### Ставки
+
+| Метод | Эндпоинт | Описание |
+|---|---|---|
+| `POST` | `/bids` | Размещение ставки |
+| `POST` | `/sync/bids` | Пакетная синхронизация offline-очереди |
+
+### Пользователь
+
+| Метод | Эндпоинт | Описание |
+|---|---|---|
+| `GET` | `/users/me` | Профиль |
+| `PUT` | `/users/me` | Обновление профиля |
+| `POST` | `/users/me/avatar` | Загрузка аватара |
+| `GET` | `/users/me/stats` | Статистика |
+| `GET` | `/users/me/notifications` | Уведомления |
+| `POST` | `/users/:id/follow` | Подписка / отписка |
+
+### Коллекции, NFT, транзакции, комментарии
+
+См. полный список маршрутов в `backend/Sources/App/routes.swift`.
+
+### WebSocket
+
 ```
+ws://<host>:8080/ws/auctions/feed   — общий поток событий (new_bid, auction_status)
+ws://<host>:8080/ws/user/:userId    — персональные уведомления (outbid, auction_won)
+```
+
+---
+
+## База данных
+
+Схема развёртывается автоматически из `database/init.sql` при первом запуске PostgreSQL.
+
+Основные сущности:
+
+```
+users               пользователи + хеши паролей + балансы
+art_styles          справочник художественных стилей
+artworks            произведения
+auctions            аукционы + конфигурация (шаг, блиц-цена, авто-брокер)
+bids                ставки + флаг synced для offline-очереди
+collections         именованные коллекции
+collection_artworks связи коллекция ↔ произведение
+nft_tokens          NFT-токены
+visualizations_3d   ссылки на USDZ-модели
+transactions        история транзакций
+notifications      уведомления
+comments, likes,
+favorites, follows  социальные взаимодействия
+auth_tokens         блок-лист отозванных JWT
+owned_artworks     произведения, выигранные пользователем
+```
+
+Тестовые данные (10 произведений, 7 пользователей, активные аукционы) загружаются из `database/seed.sql`.
+
+---
+
+## Научная новизна
+
+### Генерация карт нормалей и смещений из 2D-изображений
+
+Из исходной картины строится грейскейл-буфер, к которому применяется фильтр Собеля (две свёрточные матрицы 3×3 для производных по X и Y) через `vImageConvolve_PlanarF`. По градиентам формируется нормаль `(Gx, Gy, strength)` каждого пикселя, нормализуется и кодируется в RGB. Параллельно вычисляется карта смещений из той же грейскейл-версии. Обе карты подкладываются под PBR-материал SceneKit с физически корректным освещением, что даёт реалистичный рельеф мазков краски без ручного 3D-моделирования.
+
+### Метрика сложности текстуры
+
+На основе модуля градиента `|G| = √(Gx² + Gy²)` строится тепловая карта, отражающая распределение детализации произведения. Используется для классификации и научного анализа.
+
+### Гибридная offline-first архитектура для аукционов
+
+Ставки в офлайне не теряются: попадают в локальную очередь, отправляются на сервер пакетным эндпоинтом при появлении связи с экспоненциальной задержкой. Оптимистический UI с откатом при серверном отказе обеспечивает мгновенный отклик.
+
+### Виртуальный 3D-шоурум
+
+Авто-генерация интерактивной галереи из произведений пользователя: расстановка, физически корректное освещение (ambient + area light + per-painting picture lights), три цветовые схемы (галерея/день/ночь), персистентный layout, два режима камеры.
+
+---
+
+## Документация
+
+Сопровождающие документы находятся в `docs/`:
+
+- `tz/` — техническое задание (ГОСТ 19.201-78)
+- `pmi/` — программа и методика испытаний (ГОСТ 19.301-79)
+- `nir1/`, `nir2/` — научно-исследовательская работа
+- `diagrams/` — UML-диаграммы (классы, последовательности, развертывание)
+
+---
+
+## Лицензия
+
+Проект разработан в учебных целях в рамках выпускной квалификационной работы.

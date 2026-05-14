@@ -17,6 +17,7 @@ targets:
   NFTArts:
     type: application
     platform: iOS
+    scheme: {}
     sources:
       - path: NFTArts
         excludes:
@@ -29,8 +30,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.gorenkov.NFTArts
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
+        SUPPORTED_PLATFORMS: "iphonesimulator iphoneos"
+        SUPPORTS_MACCATALYST: false
     resources:
       - path: NFTArts/Resources/Assets.xcassets
+
 
   NFTArtsAdmin:
     type: application

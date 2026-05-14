@@ -87,15 +87,6 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         }
     }
 
-    /// Whether this artwork can be viewed in AR (has a 3D model or can generate one from image).
-    var isARAvailable: Bool {
-        if modelUrl != nil { return true }
-        switch imageSource {
-        case .uploaded: return localImageData != nil
-        case .url: return imageURL != nil
-        case .procedural, .bundled: return true
-        }
-    }
 
     enum BlockchainNetwork: String, CaseIterable, Codable {
         case ethereum = "Ethereum"

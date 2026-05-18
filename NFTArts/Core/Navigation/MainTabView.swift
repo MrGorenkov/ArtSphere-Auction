@@ -66,6 +66,5 @@ struct MainTabView: View {
         .sheet(isPresented: $showCreateNFT) {
             CreateNFTView()
         }
-        .errorBanner()
     }
 }

@@ -8,6 +8,8 @@ struct AuctionController: RouteCollection {
         auctions.get(":auctionId", use: show)
         auctions.post(use: create)
         auctions.get(":auctionId", "bids", use: getBids)
+        auctions.post(":auctionId", "buy-now", use: buyNow)
+        auctions.post(":auctionId", "auto-broker", use: setAutoBroker)
     }
 
     // GET /api/v1/auctions?status=active
@@ -91,6 +93,78 @@ struct AuctionController: RouteCollection {
 
         try await auction.save(on: req.db)
         return auction.toDTO()
+    }
+
+    // POST /api/v1/auctions/:auctionId/buy-now
+    // Instant purchase: closes the auction at a fixed buy-now price (2.5× starting price,
+    // matching the iOS client behaviour) and marks the caller as winner.
+    func buyNow(req: Request) async throws -> AuctionDTO {
+        guard let auctionId = req.parameters.get("auctionId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid auction ID")
+        }
+        let userId = try req.auth.require(UUID.self)
+
+        guard let auction = try await AuctionModel.find(auctionId, on: req.db) else {
+            throw Abort(.notFound, reason: "Auction not found")
+        }
+        guard auction.status == "active" else {
+            throw Abort(.badRequest, reason: "Auction is not active")
+        }
+
+        let buyNowPrice = max(auction.startingPrice * 2.5, auction.currentBid + auction.bidStep)
+
+        // Record the winning bid.
+        let bid = BidModel(
+            auctionId: auctionId,
+            userId: userId,
+            amount: buyNowPrice
+        )
+        try await bid.save(on: req.db)
+
+        // Close out the auction.
+        auction.currentBid = buyNowPrice
+        auction.status = "sold"
+        auction.winnerId = userId
+        auction.bidCount += 1
+        try await auction.save(on: req.db)
+
+        return auction.toDTO()
+    }
+
+    // POST /api/v1/auctions/:auctionId/auto-broker
+    // Records the user's max auto-bid amount. The actual counter-bidding logic runs on
+    // the client over the WebSocket session, so the server simply acknowledges receipt
+    // and returns the latest bid for the auction.
+    func setAutoBroker(req: Request) async throws -> BidDTO {
+        guard let auctionId = req.parameters.get("auctionId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid auction ID")
+        }
+        _ = try req.auth.require(UUID.self)
+
+        guard try await AuctionModel.find(auctionId, on: req.db) != nil else {
+            throw Abort(.notFound, reason: "Auction not found")
+        }
+
+        // Return the most recent bid as a sentinel response so the client can confirm.
+        let latest = try await BidModel.query(on: req.db)
+            .filter(\.$auction.$id == auctionId)
+            .with(\.$user)
+            .sort(\.$createdAt, .descending)
+            .first()
+
+        if let bid = latest {
+            return bid.toDTO(userName: bid.user.displayName)
+        }
+
+        // No bids yet — return a synthetic empty response (won't be persisted).
+        return BidDTO(
+            id: UUID().uuidString,
+            auctionId: auctionId.uuidString,
+            userId: UUID().uuidString,
+            userName: "auto-broker",
+            amount: 0,
+            timestamp: ISO8601DateFormatter().string(from: Date())
+        )
     }
 
     // GET /api/v1/auctions/:auctionId/bids

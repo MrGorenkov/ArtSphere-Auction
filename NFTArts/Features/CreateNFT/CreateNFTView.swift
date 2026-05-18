@@ -434,7 +434,23 @@ struct CreateNFTView: View {
                     )
                     _ = try await network.createAuction(request: auctionReq)
 
-                    // 4. Reload from API so the server version appears (correct UUID + image URL)
+                    // 4. Mint NFT token: server generates a contract address + on-chain ID
+                    //    and writes the record into nft_tokens.
+                    do {
+                        let token = try await network.mintNFT(
+                            artworkId: apiArtwork.id,
+                            blockchain: blockchain.rawValue
+                        )
+                        AnalyticsService.shared.track(.nftCreated, parameters: [
+                            "token_id": token.tokenIdOnChain,
+                            "contract": token.contractAddress
+                        ])
+                    } catch {
+                        // Minting is non-fatal: the auction itself is already on the server.
+                        print("NFT mint failed: \(error)")
+                    }
+
+                    // 5. Reload from API so the server version appears (correct UUID + image URL)
                     await auctionService.loadFromAPI()
 
                     await MainActor.run {

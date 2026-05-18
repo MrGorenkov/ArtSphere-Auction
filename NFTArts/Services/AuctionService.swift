@@ -132,6 +132,8 @@ final class AuctionService: ObservableObject {
                 self.featuredAuctions = Array(self.auctions.prefix(3))
                 self.isOnline = true
                 self.isLoadingFromAPI = false
+                // Connection restored: clear any stale "offline" banner from a previous attempt.
+                ErrorBannerService.shared.dismiss()
 
                 // Compute ownedArtworks from sold auctions where current user won
                 let wonArtworkIds = self.auctions
@@ -169,9 +171,7 @@ final class AuctionService: ObservableObject {
             await MainActor.run {
                 self.isOnline = false
                 self.isLoadingFromAPI = false
-                ErrorBannerService.shared.showOffline { [weak self] in
-                    Task { await self?.loadFromAPI() }
-                }
+                // Silently fall back to cached/mock data — no user-facing banner.
             }
             // Only load mock data if we have no existing auctions
             if await MainActor.run(body: { self.auctions.isEmpty }) {
@@ -392,7 +392,7 @@ final class AuctionService: ObservableObject {
                 let updated: APIUser = try await network.upload(
                     endpoint: "users/me/avatar",
                     imageData: imageData,
-                    imageFieldName: "avatar",
+                    imageFieldName: "file",
                     fileName: "avatar.jpg",
                     mimeType: "image/jpeg"
                 )

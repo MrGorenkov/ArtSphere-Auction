@@ -44,7 +44,7 @@ struct LoginView: View {
     var body: some View {
         ZStack {
             backgroundGradient
-            ScrollView(showsIndicators: false) {
+            ScrollView() {
                 VStack(spacing: 28) {
                     headerSection
                     modePickerSection

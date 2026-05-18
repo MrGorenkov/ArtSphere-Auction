@@ -148,6 +148,15 @@ struct PlaceBidRequest: Content, Validatable {
     }
 }
 
+struct SetAutoBrokerRequest: Content, Validatable {
+    let auctionId: String
+    let maxAmount: Double
+
+    static func validations(_ validations: inout Validations) {
+        validations.add("maxAmount", as: Double.self, is: .range(0.001...))
+    }
+}
+
 struct CreateAuctionRequest: Content, Validatable {
     let artworkId: String
     let startingPrice: Double

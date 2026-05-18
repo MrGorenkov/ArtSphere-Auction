@@ -37,3 +37,8 @@ Gemini_Generated_*.png
 
 # Reference materials from other students
 docs/ИУ5-79б_Иванов_И_И_НИРс.docx
+
+# TON contracts
+artsphere-contracts/node_modules/
+artsphere-contracts/build/
+artsphere-contracts/temp/

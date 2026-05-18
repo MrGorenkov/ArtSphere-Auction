@@ -84,7 +84,22 @@ func routes(_ app: Application) throws {
             }
         }
     }
-
+// TON Connect Manifest
+    app.get("tonconnect-manifest.json") { req -> Response in
+        let host = req.headers.first(name: .host) ?? "localhost:8080"
+        let manifest = """
+        {
+          "url": "http://\(host)",
+          "name": "ArtSphere Auction",
+          "iconUrl": "https://raw.githubusercontent.com/MrGorenkov/ArtSphere-Auction/main/NFTArts/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+          "termsOfUseUrl": "http://\(host)/terms",
+          "privacyPolicyUrl": "http://\(host)/privacy"
+        }
+        """
+        var headers = HTTPHeaders()
+        headers.replaceOrAdd(name: .contentType, value: "application/json")
+        return Response(status: .ok, headers: headers, body: .init(string: manifest))
+    }
     // ws://host:8080/ws/user/:userId — персональные уведомления
     app.webSocket("ws", "user", ":userId") { req, ws in
         guard let userIdString = req.parameters.get("userId"),

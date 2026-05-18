@@ -75,7 +75,7 @@ CREATE TABLE artworks (
     updated_at       TIMESTAMPTZ DEFAULT NOW(),
 
     CONSTRAINT valid_blockchain CHECK (blockchain IN (
-        'Ethereum', 'Polygon', 'Solana', 'Tezos'
+        'Ethereum', 'Polygon', 'Solana', 'Tezos', 'TON'
     ))
 );
 
@@ -123,7 +123,7 @@ CREATE TABLE nft_tokens (
         'minted', 'listed', 'sold', 'transferred', 'burned'
     )),
     CONSTRAINT valid_token_blockchain CHECK (blockchain IN (
-        'Ethereum', 'Polygon', 'Solana', 'Tezos'
+        'Ethereum', 'Polygon', 'Solana', 'Tezos', 'TON'
     ))
 );
 
@@ -448,3 +448,18 @@ LEFT JOIN owned_artworks oa ON oa.user_id = u.id
 LEFT JOIN favorites f ON f.user_id = u.id
 LEFT JOIN collections c ON c.user_id = u.id
 GROUP BY u.id;
+-- ============================================
+-- 12. АВТО-БРОКЕР (auto_broker_settings)
+-- ============================================
+-- Настройки автоматических ставок для пользователей
+CREATE TABLE auto_broker_settings (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    auction_id UUID NOT NULL REFERENCES auctions(id) ON DELETE CASCADE,
+    max_amount DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    
+    CONSTRAINT unique_broker_setting UNIQUE (user_id, auction_id)
+);
+
+CREATE INDEX idx_auto_broker_auction ON auto_broker_settings(auction_id);

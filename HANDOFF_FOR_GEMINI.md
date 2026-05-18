@@ -13,7 +13,7 @@ iOS-приложение «ArtSphere Auction» — аукцион цифровы
 
 ## Текущее состояние (на момент handoff)
 
-Последний коммит: **`2e5ac36`** — A4 hybrid 3D pipeline (Depth Anything V2 + Laplacian).
+Последний коммит: **`6c5ea0e`** — A4 toggle + A5 heatmap overlay + A6 admin delete/timeseries.
 
 ### Что уже сделано перед смотром макетов (был ~15 мая)
 
@@ -67,19 +67,24 @@ iOS-приложение «ArtSphere Auction» — аукцион цифровы
 - ✅ `generateHeightmap` в hybrid режиме возвращает MiDaS depth напрямую → реальная пространственная глубина в SCN displacement
 - ✅ Graceful fallback на Laplacian если CoreML модель не загрузилась
 
+**Коммит `6c5ea0e` (A4 toggle + A5 heatmap + A6 admin):**
+
+- ✅ **A4 Phase 3** — Picker в ArtworkDetailView переключает Sobel / Laplacian / Hybrid (AI) на лету. `Artwork3DView.Coordinator.applyAlgorithm(_:)` пересоздаёт normal+displacement через `Task.detached`, кэш `NormalMapGenerator` использует составной ключ `normal_<strength>_<algorithm>`.
+- ✅ **A5 Heatmap overlay** — `Slider` `heatmapBlend` (0.1…1.0) + вертикальная легенда (красный→жёлтый→синий). `setComplexityOverlay` смешивает оригинал и heatmap через `UIGraphicsImageRenderer` с `blendMode: .normal, alpha: heatmapBlend`.
+- ✅ **A6 Admin DELETE** — `DELETE /admin/auctions/:id` с явным каскадом (bids → transactions → nullify notification refs). Кнопка с `confirmationDialog` в `AuctionDetailView` (NFTArtsAdmin), `deleteAuction(_:)` чистит выделение и `bids`.
+- ✅ **A6 Admin timeseries** — `GET /admin/stats/timeseries` (14-дневная сводка количества аукционов и ставок по дням, DTO `AdminTimeseries`). Базовый URL macOS-админки переведён на `localhost:8080`.
+
 ## Что ещё нужно сделать (в порядке приоритета)
 
 ### КРИТИЧНО — осталось завершить
 
 | # | Задача | Сложность | Замечание комиссии |
 |---|---|---|---|
-| 1 | **A4 Phase 3** — UI toggle в ArtworkDetailView, чтоб можно было переключать Sobel/Laplacian/Hybrid и комиссия видела разницу | 2-3 часа | связана с пунктом 2 замечаний |
-| 2 | **A3 Auto-broker** — перенести логику автоматических контр-ставок на бекенд (таблица `auto_broker_settings`, фоновая задача, broadcast через WS) | 1 день | пункт 4 |
-| 3 | **A5 Heatmap UX** — overlay режим (полупрозрачный слой поверх оригинала), легенда, слайдер прозрачности | полдня | пункт 5 |
-| 4 | **A6 Admin DELETE** — серверный `DELETE /admin/auctions/:id` + кнопка в AuctionDetailView, плюс расширенная статистика | 1 день | пункт 10 |
-| 5 | **B (TON блокчейн)** — TestNet TON, смарт-контракт TEP-62 NFT-collection, TON Connect 2.0 SDK, реальный mint через подпись Tonkeeper | 4-5 дней | пункт 1 — **самое важное** |
-| 6 | **C1 (Шоурум пресеты + шеринг)** — 4 темы (Лувр / Современная / Лофт / Cyberpunk), универсальные ссылки artsphere://showroom/CODE, гостевой режим | 2-3 дня | пункт 8 |
-| 7 | **C2 (Bonus система)** — таблица `user_bonuses`, XP за действия, уровни 1-10 с разблокировкой тем шоурума | 2 дня | пункт 9 — опционально |
+| 1 | **A3 Auto-broker** — перенести логику автоматических контр-ставок на бекенд (таблица `auto_broker_settings`, фоновая задача, broadcast через WS) | 1 день | пункт 4 |
+| 2 | **Admin UI для timeseries** — отрисовать новый эндпоинт `/admin/stats/timeseries` (14-дневный график) на дашборде macOS-админки | 2-3 часа | пункт 10 (расширение) |
+| 3 | **B (TON блокчейн)** — TestNet TON, смарт-контракт TEP-62 NFT-collection, TON Connect 2.0 SDK, реальный mint через подпись Tonkeeper | 4-5 дней | пункт 1 — **самое важное** |
+| 4 | **C1 (Шоурум пресеты + шеринг)** — 4 темы (Лувр / Современная / Лофт / Cyberpunk), универсальные ссылки artsphere://showroom/CODE, гостевой режим | 2-3 дня | пункт 8 |
+| 5 | **C2 (Bonus система)** — таблица `user_bonuses`, XP за действия, уровни 1-10 с разблокировкой тем шоурума | 2 дня | пункт 9 — опционально |
 
 ### ДОКУМЕНТЫ — после кода
 
@@ -306,8 +311,13 @@ xcrun devicectl device install app --device AD815FE5-D00D-5E02-964F-3C490B694A9B
 
 ## Что я ОБЯЗАН передать тебе перед уходом
 
-1. **Статус последнего коммита:** `2e5ac36` — Hybrid 3D pipeline. iOS type-check чистый, backend up.
-2. **Незавершено:** Phase 3 (UI toggle переключения Sobel/Laplacian/Hybrid в Detail view).
-3. **Следующий шаг я бы взял:** Phase 3 (1-2 часа работы) → A5 Heatmap UX → A6 Admin DELETE → A3 Auto-broker → B TON → C1 Showroom themes.
+1. **Статус последнего коммита:** `6c5ea0e` — A4 toggle + A5 heatmap overlay + A6 admin delete/timeseries. Запушено в `origin/main`. iOS type-check чистый, backend up локально (`docker compose up -d`, контейнер `nftarts-api` слушает 8080).
+2. **Незавершено из блока A:** A3 auto-broker (сервер-сайд) — последняя оставшаяся задача из правок комиссии в коде iOS+backend.
+3. **Следующий шаг (по приоритету):**
+   - **A3 Auto-broker** — таблица `auto_broker_settings (user_id, auction_id, max_amount, created_at)`, миграция SQL. В `BidController.create` после сохранения новой ставки запрос на `auto_broker_settings` где `max_amount > new_bid.amount + auction.bidStep`, для каждого совпадения — автоматический counter-bid через тот же code path, broadcast через `WebSocketManager.shared`, персональное уведомление перебитому юзеру (`/ws/user/:userId`).
+   - **B (TON блокчейн)** — самый важный пункт комиссии (см. раздел «TON-интеграция» выше).
+   - **C1 Showroom themes + sharing**, потом документы.
+4. **ВАЖНО — стиль работы пользователя:** «ты за меня не собирай и билдь а то багуется и приложение вылетает я сам буду ты просто говори когда» — НЕ запускай `xcodebuild` / `devicectl install` сам. Пиши код и говори юзеру «теперь Cmd+R в Xcode».
+5. **TON-констрейнт пользователя:** «в тон интеграции я не хочу реальные деньги, можно просто нарисовать балик юзерам. а так чтобы блокчейн просто был реализован» — TestNet, не mainnet, без реальных денег, но смарт-контракт настоящий.
 
 Удачи. Если что-то непонятно — `git log --oneline -30` показывает историю последних правок, и в `TODO_DIPLOMA.md` есть полный календарный план.

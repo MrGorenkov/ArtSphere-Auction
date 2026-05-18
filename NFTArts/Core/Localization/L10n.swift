@@ -254,6 +254,13 @@ enum L10n {
     static var heatmap: String { isRu ? "Карта" : "Heatmap" }
     static var original: String { isRu ? "Оригинал" : "Original" }
     static var textureComplexity: String { isRu ? "Сложность текстуры" : "Texture Complexity" }
+    static var algorithmPicker: String { isRu ? "Алгоритм" : "Algorithm" }
+    static var algorithmSobel: String { isRu ? "Собель (классика)" : "Sobel (classic)" }
+    static var algorithmLaplacian: String { isRu ? "Лапласиан" : "Laplacian" }
+    static var algorithmHybrid: String { isRu ? "Гибрид: нейросеть + Лапласиан" : "Hybrid: NN + Laplacian" }
+    static var complexityHigh: String { isRu ? "Высокая" : "High" }
+    static var complexityMid: String { isRu ? "Средняя" : "Mid" }
+    static var complexityLow: String { isRu ? "Низкая" : "Low" }
 
     // MARK: - Profile
     static var profileTitle: String { isRu ? "Профиль" : "Profile" }

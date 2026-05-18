@@ -20,6 +20,8 @@ struct ArtworkDetailView: View {
     @State private var isFavorited = false
     @State private var showAddToCollection = false
     @State private var showComplexityOverlay = false
+    @State private var heatmapBlend: Double = 0.6
+    @State private var algorithm: NormalMapGenerator.FilterAlgorithm = NormalMapGenerator.defaultAlgorithm
     @State private var likeCount = 0
     @State private var isLikedByMe = false
     @State private var isLikeLoading = false
@@ -126,9 +128,27 @@ struct ArtworkDetailView: View {
     private var artworkSection: some View {
         ZStack(alignment: .bottomTrailing) {
             if show3DView {
-                Artwork3DView(artwork: auction.artwork, showComplexityOverlay: showComplexityOverlay)
-                    .frame(height: 400)
-                    .transition(.opacity)
+                Artwork3DView(
+                    artwork: auction.artwork,
+                    showComplexityOverlay: showComplexityOverlay,
+                    heatmapBlend: heatmapBlend,
+                    algorithm: algorithm
+                )
+                .frame(height: 400)
+                .transition(.opacity)
+                .overlay(alignment: .topLeading) {
+                    if showComplexityOverlay {
+                        heatmapLegend
+                            .padding(12)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if showComplexityOverlay {
+                        heatmapSlider
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 60)
+                    }
+                }
             } else {
                 ArtworkImageView(artwork: auction.artwork)
                     .frame(height: 400)
@@ -182,10 +202,91 @@ struct ArtworkDetailView: View {
                         .background(showComplexityOverlay ? AnyShapeStyle(Color.red.opacity(0.6)) : AnyShapeStyle(.ultraThinMaterial))
                         .clipShape(Capsule())
                     }
+
+                    // Algorithm picker — lets the user compare Sobel / Laplacian /
+                    // Depth Anything hybrid pipelines side by side.
+                    algorithmMenu
                 }
 
             }
             .padding(16)
+        }
+    }
+
+    /// Vertical color bar — explains what the heatmap colours mean. Pinned to the
+    /// top-left of the 3D view while overlay is active.
+    private var heatmapLegend: some View {
+        HStack(spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                LinearGradient(
+                    colors: [.red, .yellow, .blue],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: 14, height: 110)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.white.opacity(0.7), lineWidth: 0.5)
+                )
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(L10n.complexityHigh)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(L10n.complexityMid)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.85))
+                Spacer()
+                Text(L10n.complexityLow)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(height: 110)
+        }
+        .padding(8)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Bottom slider — fades between original and heatmap. Lets users dial the
+    /// overlay strength instead of a binary on/off swap.
+    private var heatmapSlider: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "photo")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.8))
+            Slider(value: $heatmapBlend, in: 0.1...1.0)
+                .tint(.nftPurple)
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.8))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.55), in: Capsule())
+    }
+
+    private var algorithmMenu: some View {
+        Menu {
+            Picker(L10n.algorithmPicker, selection: $algorithm) {
+                Text(L10n.algorithmSobel).tag(NormalMapGenerator.FilterAlgorithm.sobel)
+                Text(L10n.algorithmLaplacian).tag(NormalMapGenerator.FilterAlgorithm.laplacian)
+                Text(L10n.algorithmHybrid).tag(NormalMapGenerator.FilterAlgorithm.hybrid)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "cpu")
+                    .font(.system(size: 14))
+                Text(algorithm.shortLabel)
+                    .font(NFTTypography.caption)
+                    .fontWeight(.semibold)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
         }
     }
 

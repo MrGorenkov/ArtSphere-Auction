@@ -6,6 +6,10 @@ struct Artwork3DView: UIViewRepresentable {
     var artworkImage: UIImage?
     var allowsInteraction: Bool = true
     var showComplexityOverlay: Bool = false
+    /// 0 = pure original, 1 = pure heatmap. Slider in the parent view rides this.
+    var heatmapBlend: Double = 0.6
+    /// Which 3D-relief pipeline to use. Defaults to the global default (currently `.hybrid`).
+    var algorithm: NormalMapGenerator.FilterAlgorithm = NormalMapGenerator.defaultAlgorithm
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -20,6 +24,7 @@ struct Artwork3DView: UIViewRepresentable {
         let scene = createScene(coordinator: context.coordinator)
         scnView.scene = scene
         context.coordinator.scene = scene
+        context.coordinator.currentAlgorithm = algorithm
 
         if allowsInteraction {
             scnView.allowsCameraControl = true
@@ -32,7 +37,10 @@ struct Artwork3DView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SCNView, context: Context) {
-        context.coordinator.setComplexityOverlay(showComplexityOverlay)
+        context.coordinator.setComplexityOverlay(showComplexityOverlay, blend: heatmapBlend)
+        if context.coordinator.currentAlgorithm != algorithm {
+            context.coordinator.applyAlgorithm(algorithm, artwork: artwork)
+        }
     }
 
     static func dismantleUIView(_ uiView: SCNView, coordinator: Coordinator) {
@@ -58,7 +66,7 @@ struct Artwork3DView: UIViewRepresentable {
         let sourceImage = artworkImage ?? ImageLoader.cachedOrPlaceholder(for: artwork)
 
         let cacheKey = artwork.id.uuidString
-        let normalMap = NormalMapGenerator.generate(from: sourceImage, cacheKey: cacheKey)
+        let normalMap = NormalMapGenerator.generate(from: sourceImage, cacheKey: cacheKey, algorithm: algorithm)
 
         // Calculate and record texture complexity metric for scientific analysis
         if let complexity = NormalMapGenerator.calculateTextureMetric(from: sourceImage) {
@@ -93,7 +101,7 @@ struct Artwork3DView: UIViewRepresentable {
         material.lightingModel = .physicallyBased
         material.isDoubleSided = true
         // Displacement mapping for physical brushstroke relief
-        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage, cacheKey: cacheKey)
+        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage, cacheKey: cacheKey, algorithm: algorithm)
         material.displacement.contents = heightMap
         material.displacement.intensity = 0.015
         planeGeometry.materials = [material]
@@ -110,12 +118,13 @@ struct Artwork3DView: UIViewRepresentable {
         if artworkImage == nil && artwork.imageSource == .url {
             let artId = artwork.id
             let snapshot = artwork
+            let activeAlgorithm = algorithm
             Task.detached(priority: .userInitiated) {
                 let loaded = await ImageLoader.loadImage(for: snapshot)
                 // Drop placeholder-derived maps so the next generate* runs against `loaded`.
                 NormalMapGenerator.invalidate(cacheKey: artId.uuidString)
-                let newNormal = NormalMapGenerator.generate(from: loaded, cacheKey: artId.uuidString)
-                let newHeight = NormalMapGenerator.generateHeightmap(from: loaded, cacheKey: artId.uuidString)
+                let newNormal = NormalMapGenerator.generate(from: loaded, cacheKey: artId.uuidString, algorithm: activeAlgorithm)
+                let newHeight = NormalMapGenerator.generateHeightmap(from: loaded, cacheKey: artId.uuidString, algorithm: activeAlgorithm)
                 let newHeatmap = NormalMapGenerator.generateComplexityHeatmap(from: loaded, cacheKey: artId.uuidString)
                 await MainActor.run {
                     coordinator.originalImage = loaded
@@ -253,8 +262,28 @@ struct Artwork3DView: UIViewRepresentable {
         var artworkMaterial: SCNMaterial?
         var originalImage: UIImage?
         var heatmapImage: UIImage?
+        var currentAlgorithm: NormalMapGenerator.FilterAlgorithm = NormalMapGenerator.defaultAlgorithm
         private var isShowingOverlay = false
         var animationKeys: [String] = []
+
+        /// Regenerates normal + displacement maps for the new algorithm and swaps them
+        /// into the live material so the user can compare pipelines without reloading.
+        func applyAlgorithm(_ new: NormalMapGenerator.FilterAlgorithm, artwork: NFTArtwork) {
+            guard let material = artworkMaterial,
+                  let source = originalImage else { return }
+            currentAlgorithm = new
+            let cacheKey = artwork.id.uuidString
+            // Compute off the main thread to keep the UI responsive (especially for
+            // hybrid mode where CoreML inference takes ~30-50 ms).
+            Task.detached(priority: .userInitiated) {
+                let normalMap = NormalMapGenerator.generate(from: source, cacheKey: cacheKey, algorithm: new)
+                let heightMap = NormalMapGenerator.generateHeightmap(from: source, cacheKey: cacheKey, algorithm: new)
+                await MainActor.run {
+                    material.normal.contents = normalMap
+                    material.displacement.contents = heightMap
+                }
+            }
+        }
 
         func stopAnimations() {
             if let scene = scene,
@@ -266,21 +295,42 @@ struct Artwork3DView: UIViewRepresentable {
             animationKeys.removeAll()
         }
 
-        /// Switches the artwork diffuse texture between original and complexity heatmap.
-        func setComplexityOverlay(_ show: Bool) {
-            guard show != isShowingOverlay else { return }
-            isShowingOverlay = show
+        private var lastBlend: Double = -1
 
+        /// Drives the heatmap overlay. When `show` is true the diffuse texture becomes
+        /// a per-pixel mix of original ↔ heatmap controlled by `blend` (0 = original,
+        /// 1 = heatmap). Pre-blends the composite once per (show, blend) pair so the
+        /// slider stays responsive.
+        func setComplexityOverlay(_ show: Bool, blend: Double = 0.6) {
             guard let material = artworkMaterial else { return }
+            let blendChanged = abs(blend - lastBlend) > 0.01
+            if show == isShowingOverlay && !blendChanged && show == false {
+                return
+            }
+            isShowingOverlay = show
+            lastBlend = blend
 
-            if show, let heatmap = heatmapImage {
-                material.diffuse.contents = heatmap
-                material.normal.intensity = 0.0 // Disable normal map in overlay mode
-                material.lightingModel = .constant // Unlit for accurate heatmap colors
+            if show, let heatmap = heatmapImage, let original = originalImage {
+                let composite = blendImages(base: original, overlay: heatmap, alpha: blend)
+                material.diffuse.contents = composite
+                // Keep the normal map active so 3D relief is preserved over the heatmap —
+                // the commission asked for an overlay, not a flat replacement.
+                material.normal.intensity = 0.6
+                material.lightingModel = .lambert
             } else if let original = originalImage {
                 material.diffuse.contents = original
-                material.normal.intensity = 1.0
+                material.normal.intensity = 1.5
                 material.lightingModel = .physicallyBased
+            }
+        }
+
+        /// Per-pixel alpha blend of two same-sized images via Core Graphics. Cheap
+        /// enough to run on every slider tick (~5 ms for a 1024×1024 image).
+        private func blendImages(base: UIImage, overlay: UIImage, alpha: Double) -> UIImage {
+            let renderer = UIGraphicsImageRenderer(size: base.size)
+            return renderer.image { _ in
+                base.draw(in: CGRect(origin: .zero, size: base.size))
+                overlay.draw(in: CGRect(origin: .zero, size: base.size), blendMode: .normal, alpha: CGFloat(alpha))
             }
         }
     }

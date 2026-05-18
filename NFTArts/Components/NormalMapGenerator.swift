@@ -15,10 +15,21 @@ enum NormalMapGenerator {
     ///   for global scene depth + Laplacian for fine surface texture. Combined map
     ///   captures both spatial geometry of the scene AND the relief of brush strokes —
     ///   qualitatively richer than any single classical filter.
-    enum FilterAlgorithm: String {
+    enum FilterAlgorithm: String, CaseIterable, Identifiable {
         case sobel
         case laplacian
         case hybrid
+
+        var id: String { rawValue }
+
+        /// Compact label for the on-screen toggle button.
+        var shortLabel: String {
+            switch self {
+            case .sobel:     return "Sobel"
+            case .laplacian: return "Lap"
+            case .hybrid:    return "AI"
+            }
+        }
     }
 
     /// Default pipeline. Hybrid uses the Neural Engine for global depth, classical

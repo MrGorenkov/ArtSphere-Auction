@@ -54,8 +54,16 @@ class AdminNetworkService {
         try await put(endpoint: "admin/auctions/\(id)/cancel")
     }
 
+    func deleteAuction(id: String) async throws {
+        try await deleteRequest(endpoint: "admin/auctions/\(id)")
+    }
+
     func fetchAuctionBids(auctionId: String) async throws -> [AdminBid] {
         try await get(endpoint: "admin/auctions/\(auctionId)/bids")
+    }
+
+    func fetchTimeseries() async throws -> AdminTimeseries {
+        try await get(endpoint: "admin/stats/timeseries")
     }
 
     // MARK: - HTTP Helpers

@@ -15,6 +15,8 @@ struct AdminController: RouteCollection {
         admin.get("auctions", use: listAuctions)
         admin.put("auctions", ":auctionId", "cancel", use: cancelAuction)
         admin.get("auctions", ":auctionId", "bids", use: auctionBids)
+        admin.delete("auctions", ":auctionId", use: deleteAuction)
+        admin.get("stats", "timeseries", use: timeseriesStats)
     }
 
     // MARK: - Dashboard
@@ -341,6 +343,72 @@ struct AdminController: RouteCollection {
             )
         }
     }
+
+    // DELETE /api/v1/admin/auctions/:auctionId
+    // Hard-deletes an auction and cascades to its bids/transactions/notifications.
+    // Use sparingly — the more conservative `cancelAuction` is preferred for live
+    // moderation. Delete exists for clearing test data.
+    func deleteAuction(req: Request) async throws -> HTTPStatus {
+        guard let auctionId = req.parameters.get("auctionId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid auction ID")
+        }
+        guard let auction = try await AuctionModel.find(auctionId, on: req.db) else {
+            throw Abort(.notFound, reason: "Auction not found")
+        }
+
+        let db = req.db as! SQLDatabase
+        // Children that don't cascade on their own.
+        try await db.raw("DELETE FROM bids WHERE auction_id = \(bind: auctionId)").run()
+        try await db.raw("DELETE FROM transactions WHERE auction_id = \(bind: auctionId)").run()
+        try await db.raw("UPDATE notifications SET related_auction_id = NULL WHERE related_auction_id = \(bind: auctionId)").run()
+        try await auction.delete(on: req.db)
+        return .noContent
+    }
+
+    // GET /api/v1/admin/stats/timeseries
+    // Returns the last 14 days of auction and bid counts, bucketed by day.
+    // Used by the macOS admin dashboard's activity chart.
+    func timeseriesStats(req: Request) async throws -> AdminTimeseriesDTO {
+        let db = req.db as! SQLDatabase
+
+        let auctionRows = try await db.raw("""
+            SELECT date_trunc('day', created_at) AS day, COUNT(*) AS n
+            FROM auctions
+            WHERE created_at > NOW() - INTERVAL '14 days'
+            GROUP BY day
+            ORDER BY day
+        """).all()
+        let bidRows = try await db.raw("""
+            SELECT date_trunc('day', created_at) AS day, COUNT(*) AS n
+            FROM bids
+            WHERE created_at > NOW() - INTERVAL '14 days'
+            GROUP BY day
+            ORDER BY day
+        """).all()
+
+        let auctions = try auctionRows.map { row in
+            AdminTimeseriesDTO.Point(
+                day: try row.decode(column: "day", as: Date.self).iso8601String,
+                count: try row.decode(column: "n", as: Int.self)
+            )
+        }
+        let bids = try bidRows.map { row in
+            AdminTimeseriesDTO.Point(
+                day: try row.decode(column: "day", as: Date.self).iso8601String,
+                count: try row.decode(column: "n", as: Int.self)
+            )
+        }
+        return AdminTimeseriesDTO(auctions: auctions, bids: bids)
+    }
+}
+
+struct AdminTimeseriesDTO: Content {
+    struct Point: Content {
+        let day: String
+        let count: Int
+    }
+    let auctions: [Point]
+    let bids: [Point]
 }
 
 // MARK: - Admin DTOs

@@ -5,6 +5,8 @@ struct AuctionDetailView: View {
     let bids: [AdminBid]
     let isLoadingBids: Bool
     let onCancel: () -> Void
+    let onDelete: () -> Void
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         ScrollView {
@@ -56,15 +58,36 @@ struct AuctionDetailView: View {
                     DetailRow(label: "Создатель", value: creator)
                 }
 
-                // Cancel button
+                // Cancel button (soft action — keeps record, just marks as ended)
                 if auction.status == "active" || auction.status == "upcoming" {
                     Button(action: onCancel) {
                         Label("Отменить аукцион", systemImage: "xmark.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .tint(.orange)
                     .controlSize(.large)
+                }
+
+                // Hard delete — removes the auction and all its bids permanently.
+                Button(role: .destructive) {
+                    showDeleteConfirm = true
+                } label: {
+                    Label("Удалить аукцион", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.large)
+                .confirmationDialog(
+                    "Удалить аукцион «\(auction.artworkTitle)»?",
+                    isPresented: $showDeleteConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Удалить", role: .destructive, action: onDelete)
+                    Button("Отмена", role: .cancel) {}
+                } message: {
+                    Text("Все ставки и связанные транзакции будут удалены безвозвратно.")
                 }
 
                 Divider()

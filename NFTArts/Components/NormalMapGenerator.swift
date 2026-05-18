@@ -5,22 +5,26 @@ enum NormalMapGenerator {
 
     // MARK: - Algorithm
 
-    /// Choice of edge-detection algorithm used to extract surface relief from a flat image.
+    /// Choice of pipeline used to extract surface relief from a flat image.
     ///
     /// - `sobel`: classic first-derivative gradient filter (3×3, separable Gx/Gy). Cheap,
     ///   robust, but misses fine details and produces broad edges.
-    /// - `laplacian`: second-derivative Marr–Hildreth (Laplacian of Gaussian). Reacts to
-    ///   curvature changes rather than slopes — picks up thin brush strokes and texture
-    ///   transitions Sobel smooths over, at the cost of being more noise-sensitive
-    ///   (we already pre-blur with a 3×3 Gaussian, which is exactly the "LoG" pipeline).
+    /// - `laplacian`: Marr–Hildreth (Laplacian of Gaussian). Reacts to curvature changes
+    ///   rather than slopes — picks up thin brush strokes Sobel smooths over.
+    /// - `hybrid`: Depth Anything V2 (Vision Transformer, monocular depth estimation)
+    ///   for global scene depth + Laplacian for fine surface texture. Combined map
+    ///   captures both spatial geometry of the scene AND the relief of brush strokes —
+    ///   qualitatively richer than any single classical filter.
     enum FilterAlgorithm: String {
         case sobel
         case laplacian
+        case hybrid
     }
 
-    /// Default algorithm for new generations. Switched to Laplacian (LoG variant) per
-    /// post-review feedback — gives sharper relief on brush-stroke textures than Sobel.
-    static var defaultAlgorithm: FilterAlgorithm = .laplacian
+    /// Default pipeline. Hybrid uses the Neural Engine for global depth, classical
+    /// Laplacian for fine detail — the strongest combination available on-device.
+    /// Falls back to Laplacian automatically if the CoreML model isn't loaded.
+    static var defaultAlgorithm: FilterAlgorithm = .hybrid
 
     // MARK: - Cache
 
@@ -53,24 +57,61 @@ enum NormalMapGenerator {
     /// the next `generate*` call rebuilds from the new bytes instead of returning the
     /// placeholder-derived map.
     static func invalidate(cacheKey: String) {
-        let suffixes = ["normal_3.5", "heightmap", "heatmap"]
+        // Cover every (algorithm, strength) combination we ever cache under.
+        var suffixes: [String] = ["heatmap"]
+        for algo in ["sobel", "laplacian", "hybrid"] {
+            suffixes.append("normal_3.5_\(algo)")
+            suffixes.append("height_\(algo)")
+        }
         for suffix in suffixes {
             let key = Cache.key(cacheKey, suffix: suffix)
             Cache.normalMap.removeObject(forKey: key)
             Cache.heightmap.removeObject(forKey: key)
             Cache.heatmap.removeObject(forKey: key)
         }
+        DepthEstimator.shared.invalidate(cacheKey: cacheKey)
     }
 
-    /// Generates a normal map from a 2D image using Sobel filter for edge detection.
-    /// The image is converted to grayscale as a height map, then gradients
-    /// are calculated to produce normal vectors encoded as RGB.
-    /// Pass `cacheKey` (e.g., artwork id) to avoid recomputing on repeat opens.
-    static func generate(from image: UIImage, strength: Float = 3.5, cacheKey: String? = nil) -> UIImage {
+    /// Generates a normal map from a 2D image.
+    ///
+    /// Dispatches to the algorithm-specific pipeline (Sobel / Laplacian / Hybrid).
+    /// Hybrid falls back to Laplacian if the CoreML depth model isn't available
+    /// (e.g. on simulator without Neural Engine, or if the resource didn't ship).
+    static func generate(
+        from image: UIImage,
+        strength: Float = 3.5,
+        cacheKey: String? = nil,
+        algorithm: FilterAlgorithm = NormalMapGenerator.defaultAlgorithm
+    ) -> UIImage {
+        let cacheSuffix = "normal_\(strength)_\(algorithm.rawValue)"
         if let raw = cacheKey,
-           let cached = Cache.normalMap.object(forKey: Cache.key(raw, suffix: "normal_\(strength)")) {
+           let cached = Cache.normalMap.object(forKey: Cache.key(raw, suffix: cacheSuffix)) {
             return cached
         }
+
+        let result: UIImage
+        switch algorithm {
+        case .sobel:
+            result = generateSobel(from: image, strength: strength)
+        case .laplacian:
+            result = generateLaplacian(from: image, strength: strength)
+        case .hybrid:
+            if DepthEstimator.shared.isAvailable {
+                result = generateHybrid(from: image, strength: strength, cacheKey: cacheKey)
+            } else {
+                result = generateLaplacian(from: image, strength: strength)
+            }
+        }
+        if let raw = cacheKey {
+            Cache.normalMap.setObject(result, forKey: Cache.key(raw, suffix: cacheSuffix))
+        }
+        return result
+    }
+
+    // MARK: - Sobel pipeline (legacy)
+
+    /// Classical Sobel-based normal map. Cheap, robust, finds broad edges.
+    private static func generateSobel(from image: UIImage, strength: Float) -> UIImage {
         let start = CFAbsoluteTimeGetCurrent()
         defer {
             let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
@@ -179,10 +220,202 @@ enum NormalMapGenerator {
 
         let result = UIImage(cgImage: normalCGImage)
         normalData.deallocate()
-        if let raw = cacheKey {
-            Cache.normalMap.setObject(result, forKey: Cache.key(raw, suffix: "normal_\(strength)"))
-        }
         return result
+    }
+
+    // MARK: - Laplacian pipeline
+
+    /// Marr–Hildreth pipeline: Gaussian smoothing followed by the Laplacian operator.
+    /// Reacts to **second-order** changes in brightness, so it isolates the sharp ridges
+    /// of brush strokes (where curvature flips) rather than the broad slopes Sobel finds.
+    /// Less stable on noisy input, but we already pre-blur with a 3×3 Gaussian.
+    ///
+    /// To turn the scalar Laplacian into a 2-component gradient suitable for a normal
+    /// map, we compute the second partial derivatives ∂²/∂x² and ∂²/∂y² separately and
+    /// treat them as (nx, ny) just like Sobel's (Gx, Gy).
+    private static func generateLaplacian(from image: UIImage, strength: Float) -> UIImage {
+        let start = CFAbsoluteTimeGetCurrent()
+        defer {
+            let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
+            MetricsService.shared.record(category: "3d_rendering", name: "normal_map_laplacian_ms", value: elapsed, unit: "ms")
+        }
+        guard let cgImage = image.cgImage else { return image }
+        let width = cgImage.width
+        let height = cgImage.height
+        guard var gray = createGrayscaleBuffer(from: cgImage, width: width, height: height) else { return image }
+        var blurred = createEmptyBuffer(width: width, height: height)
+        let gauss: [Float] = [1, 2, 1, 2, 4, 2, 1, 2, 1].map { $0 / 16.0 }
+        vImageConvolve_PlanarF(&gray, &blurred, nil, 0, 0, gauss, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+
+        // ∂²/∂x² and ∂²/∂y² kernels — second-order finite differences.
+        var dxx = createEmptyBuffer(width: width, height: height)
+        var dyy = createEmptyBuffer(width: width, height: height)
+        let laplaceX: [Float] = [0, 0, 0, 1, -2, 1, 0, 0, 0]
+        let laplaceY: [Float] = [0, 1, 0, 0, -2, 0, 0, 1, 0]
+        vImageConvolve_PlanarF(&blurred, &dxx, nil, 0, 0, laplaceX, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+        vImageConvolve_PlanarF(&blurred, &dyy, nil, 0, 0, laplaceY, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+
+        defer {
+            gray.data.deallocate()
+            blurred.data.deallocate()
+            dxx.data.deallocate()
+            dyy.data.deallocate()
+        }
+
+        return buildNormalImage(
+            dx: dxx.data.assumingMemoryBound(to: Float.self),
+            dy: dyy.data.assumingMemoryBound(to: Float.self),
+            width: width, height: height,
+            strength: strength
+        ) ?? image
+    }
+
+    // MARK: - Hybrid pipeline (Depth Anything V2 + Laplacian detail)
+
+    /// Two-stream pipeline:
+    /// 1. Global depth from Depth Anything V2 (CoreML on Neural Engine) — captures
+    ///    spatial geometry of the *scene* (foreground/background, perspective).
+    /// 2. Fine-grain Laplacian gradient on the original image — preserves the texture
+    ///    of brush strokes that flat depth misses.
+    /// 3. Per-pixel weighted sum (`0.7 * depth + 0.3 * laplacian`) becomes a single
+    ///    combined heightmap; finite differences of that height field yield the normals.
+    private static func generateHybrid(
+        from image: UIImage,
+        strength: Float,
+        cacheKey: String?
+    ) -> UIImage {
+        let start = CFAbsoluteTimeGetCurrent()
+        defer {
+            let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
+            MetricsService.shared.record(category: "3d_rendering", name: "normal_map_hybrid_ms", value: elapsed, unit: "ms")
+        }
+
+        guard let depth = DepthEstimator.shared.depthMap(for: image, cacheKey: cacheKey),
+              let depthCG = depth.cgImage,
+              let sourceCG = image.cgImage else {
+            return generateLaplacian(from: image, strength: strength)
+        }
+
+        let width = sourceCG.width
+        let height = sourceCG.height
+
+        // Pull depth (already same dimensions as source — DepthEstimator resamples).
+        guard var depthBuf = createGrayscaleBuffer(from: depthCG, width: width, height: height) else {
+            return generateLaplacian(from: image, strength: strength)
+        }
+        guard var sourceBuf = createGrayscaleBuffer(from: sourceCG, width: width, height: height) else {
+            depthBuf.data.deallocate()
+            return generateLaplacian(from: image, strength: strength)
+        }
+        var blurred = createEmptyBuffer(width: width, height: height)
+        let gauss: [Float] = [1, 2, 1, 2, 4, 2, 1, 2, 1].map { $0 / 16.0 }
+        vImageConvolve_PlanarF(&sourceBuf, &blurred, nil, 0, 0, gauss, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+
+        var laplaceXBuf = createEmptyBuffer(width: width, height: height)
+        var laplaceYBuf = createEmptyBuffer(width: width, height: height)
+        let kernelX: [Float] = [0, 0, 0, 1, -2, 1, 0, 0, 0]
+        let kernelY: [Float] = [0, 1, 0, 0, -2, 0, 0, 1, 0]
+        vImageConvolve_PlanarF(&blurred, &laplaceXBuf, nil, 0, 0, kernelX, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+        vImageConvolve_PlanarF(&blurred, &laplaceYBuf, nil, 0, 0, kernelY, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+
+        defer {
+            depthBuf.data.deallocate()
+            sourceBuf.data.deallocate()
+            blurred.data.deallocate()
+            laplaceXBuf.data.deallocate()
+            laplaceYBuf.data.deallocate()
+        }
+
+        // Take finite differences of the depth field along X and Y so we have a real
+        // gradient. The depth itself is "how close" not "how much it changes".
+        var depthDX = createEmptyBuffer(width: width, height: height)
+        var depthDY = createEmptyBuffer(width: width, height: height)
+        let sobelX: [Float] = [-1, 0, 1, -2, 0, 2, -1, 0, 1]
+        let sobelY: [Float] = [-1, -2, -1, 0, 0, 0, 1, 2, 1]
+        vImageConvolve_PlanarF(&depthBuf, &depthDX, nil, 0, 0, sobelX, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+        vImageConvolve_PlanarF(&depthBuf, &depthDY, nil, 0, 0, sobelY, 3, 3, 0, vImage_Flags(kvImageEdgeExtend))
+
+        defer {
+            depthDX.data.deallocate()
+            depthDY.data.deallocate()
+        }
+
+        // Weighted combine: 0.7 * depth-grad + 0.3 * laplacian-detail.
+        let count = width * height
+        let combinedDX = UnsafeMutablePointer<Float>.allocate(capacity: count)
+        let combinedDY = UnsafeMutablePointer<Float>.allocate(capacity: count)
+        defer {
+            combinedDX.deallocate()
+            combinedDY.deallocate()
+        }
+        let dxDepth = depthDX.data.assumingMemoryBound(to: Float.self)
+        let dyDepth = depthDY.data.assumingMemoryBound(to: Float.self)
+        let dxLap = laplaceXBuf.data.assumingMemoryBound(to: Float.self)
+        let dyLap = laplaceYBuf.data.assumingMemoryBound(to: Float.self)
+
+        var w1: Float = 0.7
+        var w2: Float = 0.3
+        vDSP_vsmsma(dxDepth, 1, &w1, dxLap, 1, &w2, combinedDX, 1, vDSP_Length(count))
+        vDSP_vsmsma(dyDepth, 1, &w1, dyLap, 1, &w2, combinedDY, 1, vDSP_Length(count))
+
+        return buildNormalImage(
+            dx: combinedDX, dy: combinedDY,
+            width: width, height: height,
+            strength: strength
+        ) ?? image
+    }
+
+    // MARK: - Normal map builder (shared by all pipelines)
+
+    /// Takes a pair of (∂h/∂x, ∂h/∂y) gradient buffers and emits an RGBA normal map
+    /// in OpenGL conventions (R = nx, G = ny, B = nz, A = 255).
+    private static func buildNormalImage(
+        dx: UnsafePointer<Float>,
+        dy: UnsafePointer<Float>,
+        width: Int,
+        height: Int,
+        strength: Float
+    ) -> UIImage? {
+        let bytesPerRow = width * 4
+        let totalBytes = height * bytesPerRow
+        let normalData = UnsafeMutablePointer<UInt8>.allocate(capacity: totalBytes)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = y * width + x
+                let pixelOffset = y * bytesPerRow + x * 4
+                let gx = dx[idx] * strength
+                let gy = dy[idx] * strength
+                let gz: Float = 1.0
+                let length = sqrtf(gx * gx + gy * gy + gz * gz)
+                let nx = gx / length
+                let ny = gy / length
+                let nz = gz / length
+                normalData[pixelOffset + 0] = UInt8(clamping: Int((nx * 0.5 + 0.5) * 255))
+                normalData[pixelOffset + 1] = UInt8(clamping: Int((ny * 0.5 + 0.5) * 255))
+                normalData[pixelOffset + 2] = UInt8(clamping: Int((nz * 0.5 + 0.5) * 255))
+                normalData[pixelOffset + 3] = 255
+            }
+        }
+
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: normalData,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ),
+              let cg = context.makeImage()
+        else {
+            normalData.deallocate()
+            return nil
+        }
+        let img = UIImage(cgImage: cg)
+        normalData.deallocate()
+        return img
     }
 
     // MARK: - Texture Complexity Metric
@@ -411,10 +644,25 @@ enum NormalMapGenerator {
     // MARK: - Heightmap for Displacement
 
     /// Generates a grayscale heightmap from an image for displacement mapping in SceneKit.
-    static func generateHeightmap(from image: UIImage, cacheKey: String? = nil) -> UIImage {
+    static func generateHeightmap(
+        from image: UIImage,
+        cacheKey: String? = nil,
+        algorithm: FilterAlgorithm = NormalMapGenerator.defaultAlgorithm
+    ) -> UIImage {
+        let suffix = "height_\(algorithm.rawValue)"
         if let raw = cacheKey,
-           let cached = Cache.heightmap.object(forKey: Cache.key(raw, suffix: "height")) {
+           let cached = Cache.heightmap.object(forKey: Cache.key(raw, suffix: suffix)) {
             return cached
+        }
+        // In hybrid mode the displacement map is the depth estimation itself: brighter
+        // pixels (closer) get pushed outwards by SceneKit's displacement intensity, so
+        // perspective in the painting becomes physical relief on the SCNPlane.
+        if algorithm == .hybrid, DepthEstimator.shared.isAvailable,
+           let depth = DepthEstimator.shared.depthMap(for: image, cacheKey: cacheKey) {
+            if let raw = cacheKey {
+                Cache.heightmap.setObject(depth, forKey: Cache.key(raw, suffix: suffix))
+            }
+            return depth
         }
         let start = CFAbsoluteTimeGetCurrent()
         defer {

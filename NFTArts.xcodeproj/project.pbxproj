@@ -20,6 +20,7 @@
 		18C644E92BCC03E8CCF32034 /* AdminAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E40C477B255CC582BF47C6B6 /* AdminAuthManager.swift */; };
 		19907E73FD4A600277545697 /* AdminNetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6456044555E6F86C6FA71322 /* AdminNetworkService.swift */; };
 		1E2635CA65B5F4DE97370984 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC585E4A7458AD74322B40C /* OnboardingView.swift */; };
+		2A29AF86906DB9A1D4C981FC /* DepthAnythingV2SmallF16INT8.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 940A94A93E34260122C61C06 /* DepthAnythingV2SmallF16INT8.mlpackage */; };
 		2AA73A9C332C5B5F96790942 /* ArtworkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EB3102FD8542F37DAED8CC /* ArtworkDetailView.swift */; };
 		2F8868D93E7FD6ADFF2B1F6C /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 0AF6807861394A54CEFD09B0 /* AppIcon.icns */; };
 		31B73CFF0A78E1D1CE2F54A9 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4C09C2F5DB538041C886E8D /* User.swift */; };
@@ -126,6 +127,7 @@
 		808CCD70D83E0894E8E899CB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		89966BF9F480458FBC83D40D /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
 		92A1D009C88185612BCBE17F /* MetricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsService.swift; sourceTree = "<group>"; };
+		940A94A93E34260122C61C06 /* DepthAnythingV2SmallF16INT8.mlpackage */ = {isa = PBXFileReference; path = DepthAnythingV2SmallF16INT8.mlpackage; sourceTree = "<group>"; };
 		94E582C05966DD22B080A491 /* FullScreen3DViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreen3DViewer.swift; sourceTree = "<group>"; };
 		98EBC59498F8DDFAC1F29383 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		AC0948361C0CEC6368439DC2 /* BidQueueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BidQueueService.swift; sourceTree = "<group>"; };
@@ -341,6 +343,14 @@
 			path = Collection;
 			sourceTree = "<group>";
 		};
+		947A3F3CEC4AFA98F4258990 /* ML */ = {
+			isa = PBXGroup;
+			children = (
+				940A94A93E34260122C61C06 /* DepthAnythingV2SmallF16INT8.mlpackage */,
+			);
+			path = ML;
+			sourceTree = "<group>";
+		};
 		94F0856C48242A99C6FDE7EF /* Profile */ = {
 			isa = PBXGroup;
 			children = (
@@ -448,6 +458,7 @@
 			isa = PBXGroup;
 			children = (
 				6C2FC4C6690900B82817EE01 /* Assets.xcassets */,
+				947A3F3CEC4AFA98F4258990 /* ML */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -601,6 +612,7 @@
 				47A340A41A385D67F978B340 /* Color+Extensions.swift in Sources */,
 				0E3073DB0B16758E4A15C7B3 /* CountdownTimerView.swift in Sources */,
 				61A0BB641E7B9A7D12D688CE /* CreateNFTView.swift in Sources */,
+				2A29AF86906DB9A1D4C981FC /* DepthAnythingV2SmallF16INT8.mlpackage in Sources */,
 				5FDCD6D76BBCE1FC60A59C00 /* ErrorBanner.swift in Sources */,
 				B2DB01A9BA836889925DB369 /* ExploreView.swift in Sources */,
 				4CE25AEF7398CD3A785A2327 /* FeedView.swift in Sources */,

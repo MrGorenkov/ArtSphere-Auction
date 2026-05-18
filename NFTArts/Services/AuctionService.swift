@@ -128,8 +128,16 @@ final class AuctionService: ObservableObject {
                     !serverIds.contains(auction.id) && auction.artwork.imageSource == .uploaded
                 }
                 self.artworkCache = cache
-                self.auctions = mappedAuctions + localOnly
-                self.featuredAuctions = Array(self.auctions.prefix(3))
+                // Belt and braces: only lots that are truly live land in the main feed.
+                // Server already filters, but if a stale/finished record slips through
+                // it would otherwise pollute the home screen.
+                let liveOnly = (mappedAuctions + localOnly).filter { $0.isActive }
+                self.auctions = liveOnly
+                // Featured rail shows the three soonest-to-end lots — keeps the
+                // "Ending soon" promise truthful even when the feed is sparse.
+                self.featuredAuctions = Array(
+                    liveOnly.sorted { $0.timeRemaining < $1.timeRemaining }.prefix(3)
+                )
                 self.isOnline = true
                 self.isLoadingFromAPI = false
                 // Connection restored: clear any stale "offline" banner from a previous attempt.
@@ -629,28 +637,39 @@ final class AuctionService: ObservableObject {
         if isOnline {
             Task {
                 do {
-                    let apiAuctions = try await network.fetchAuctions(status: "sold")
-                    let artworks = try await network.fetchArtworks()
+                    // Pull both finished states from the server in parallel.
+                    async let soldTask = network.fetchAuctions(status: "sold")
+                    async let endedTask = network.fetchAuctions(status: "ended")
+                    async let artworksTask = network.fetchArtworks()
+
+                    let sold = try await soldTask
+                    let ended = try await endedTask
+                    let artworks = try await artworksTask
+
                     var cache: [String: NFTArtwork] = [:]
                     for apiArt in artworks {
                         cache[apiArt.id] = Self.mapArtworkDTO(apiArt)
                     }
                     var mapped: [Auction] = []
-                    for apiAuction in apiAuctions {
+                    for apiAuction in sold + ended {
                         if let artwork = cache[apiAuction.artworkId] {
                             mapped.append(Self.mapAuctionDTO(apiAuction, artwork: artwork))
                         }
                     }
+                    // Show most recently ended at the top.
+                    mapped.sort { $0.endTime > $1.endTime }
                     await MainActor.run { self.completedAuctions = mapped }
                 } catch {
                     print("Failed to fetch completed auctions: \(error)")
                     await MainActor.run {
-                        self.completedAuctions = self.auctions.filter { $0.status == .sold || $0.status == .ended }
+                        self.completedAuctions = self.auctions
+                            .filter { $0.status == .sold || $0.status == .ended || $0.hasEnded }
                     }
                 }
             }
         } else {
-            completedAuctions = auctions.filter { $0.status == .sold || $0.status == .ended }
+            completedAuctions = auctions
+                .filter { $0.status == .sold || $0.status == .ended || $0.hasEnded }
         }
     }
 

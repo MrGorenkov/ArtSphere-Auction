@@ -242,7 +242,7 @@ struct FeaturedAuctionCard: View {
 
             // Featured badge — top-leading
             HStack(spacing: 4) {
-                Image(systemName: "crown.fill")
+                Image(systemName: "hourglass")
                     .font(.system(size: 10, weight: .bold))
                 Text(L10n.featuredBadge)
                     .font(.system(size: 11, weight: .heavy))

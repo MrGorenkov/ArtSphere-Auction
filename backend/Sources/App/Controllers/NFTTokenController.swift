@@ -4,67 +4,61 @@ import Fluent
 struct NFTTokenController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let nft = routes.grouped("nft")
-        nft.get(use: myTokens)
-        nft.post("mint", use: mint)
-        nft.get(":tokenId", use: show)
+        nft.post("mint", use: mintNFT)
     }
 
-    // GET /api/v1/nft — мои NFT токены
-    func myTokens(req: Request) async throws -> [NFTTokenDTO] {
-        let userId = try req.auth.require(UUID.self)
-
-        let tokens = try await NFTTokenModel.query(on: req.db)
-            .filter(\.$owner.$id == userId)
-            .sort(\.$mintedAt, .descending)
-            .all()
-
-        return tokens.map { $0.toDTO() }
-    }
-
-    // GET /api/v1/nft/:tokenId
-    func show(req: Request) async throws -> NFTTokenDTO {
-        guard let tokenId = req.parameters.get("tokenId", as: UUID.self) else {
-            throw Abort(.badRequest, reason: "Invalid token ID")
-        }
-
-        guard let token = try await NFTTokenModel.find(tokenId, on: req.db) else {
-            throw Abort(.notFound, reason: "NFT token not found")
-        }
-
-        return token.toDTO()
-    }
-
-    // POST /api/v1/nft/mint — создать NFT из произведения
-    func mint(req: Request) async throws -> NFTTokenDTO {
-        let userId = try req.auth.require(UUID.self)
+    // POST /api/v1/nft/mint
+    func mintNFT(req: Request) async throws -> NFTTokenDTO {
+        let user = try req.auth.require(UserModel.self)
+        let userId = try user.requireID()
         let body = try req.content.decode(MintNFTRequest.self)
 
         guard let artworkId = UUID(uuidString: body.artworkId) else {
             throw Abort(.badRequest, reason: "Invalid artwork ID")
         }
 
+        // Проверяем, существует ли работа
         guard let artwork = try await ArtworkModel.find(artworkId, on: req.db) else {
             throw Abort(.notFound, reason: "Artwork not found")
         }
 
-        guard artwork.$creator.id == userId else {
-            throw Abort(.forbidden, reason: "You can only mint your own artworks")
+        // Проверяем, не сминтили ли её уже
+        if let _ = try await NFTTokenModel.query(on: req.db)
+            .filter(\.$artwork.$id == artworkId)
+            .first() {
+            throw Abort(.badRequest, reason: "NFT for this artwork already exists")
         }
 
-        // Генерация адреса контракта (симуляция)
-        let contractAddress = "0x" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(40)
-        let tokenIdOnChain = String(Int.random(in: 1...999999))
+        // ВАЖНО: Ниже мы пока ставим плейсхолдер. 
+        // Когда ты задеплоишь реальную коллекцию на Шаге 2, сюда нужно будет вставить её адрес!
+        let collectionAddress = "EQCYoGV2OPqa3wgVF8Ac7lDs25Ifz9ImJylMHFIX7uS3hpiJ"
+        let generatedTokenId = String(Int.random(in: 1000...999999)) // Имитация ID токена в блокчейне
 
         let token = NFTTokenModel(
             artworkId: artworkId,
             ownerId: userId,
-            contractAddress: String(contractAddress),
-            tokenIdOnChain: tokenIdOnChain,
-            blockchain: body.blockchain ?? artwork.blockchain,
+            contractAddress: collectionAddress,
+            tokenIdOnChain: generatedTokenId,
+            blockchain: "TON",
             status: "minted"
         )
 
         try await token.save(on: req.db)
-        return token.toDTO()
+
+        // Генерируем фейковый URI для метаданных на базе MinIO
+        token.metadataUri = "\(APIConfig.baseURL)/metadata/\(generatedTokenId).json"
+        try await token.save(on: req.db)
+
+        return NFTTokenDTO(
+            id: try token.requireID().uuidString,
+            artworkId: artworkId.uuidString,
+            ownerId: userId.uuidString,
+            contractAddress: collectionAddress,
+            tokenIdOnChain: generatedTokenId,
+            blockchain: token.blockchain,
+            status: token.status,
+            mintedAt: ISO8601DateFormatter().string(from: token.mintedAt ?? Date()),
+            metadataUri: token.metadataUri
+        )
     }
 }

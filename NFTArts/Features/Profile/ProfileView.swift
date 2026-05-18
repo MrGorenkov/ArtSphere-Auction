@@ -43,6 +43,12 @@ struct ProfileView: View {
                             .font(NFTTypography.bid)
                             .foregroundStyle(.nftGreen)
                     }
+                    
+                    // ==========================================
+                    // КНОПКА ПОДКЛЮЧЕНИЯ TONKEEPER
+                    // ==========================================
+                    TONConnectButton()
+                        .padding(.vertical, 4)
                 }
 
                 // Appearance

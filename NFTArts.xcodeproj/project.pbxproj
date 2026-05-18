@@ -22,6 +22,7 @@
 		1E2635CA65B5F4DE97370984 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC585E4A7458AD74322B40C /* OnboardingView.swift */; };
 		2A29AF86906DB9A1D4C981FC /* DepthAnythingV2SmallF16INT8.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 940A94A93E34260122C61C06 /* DepthAnythingV2SmallF16INT8.mlpackage */; };
 		2AA73A9C332C5B5F96790942 /* ArtworkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EB3102FD8542F37DAED8CC /* ArtworkDetailView.swift */; };
+		2B2383EA687DD559171E4A3F /* TONConnectService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F9F9D5C27455AFFD66857F /* TONConnectService.swift */; };
 		2F8868D93E7FD6ADFF2B1F6C /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 0AF6807861394A54CEFD09B0 /* AppIcon.icns */; };
 		31B73CFF0A78E1D1CE2F54A9 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4C09C2F5DB538041C886E8D /* User.swift */; };
 		349DAD76EB12411201DF4D67 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645B414BB14495BE94483F1B /* AppDelegate.swift */; };
@@ -33,6 +34,7 @@
 		5920E4002ABEBC7850AF7D76 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808CCD70D83E0894E8E899CB /* Theme.swift */; };
 		5FB8B4C33E46930DB7136731 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13885D41823758CB4BAA4335 /* MessagesView.swift */; };
 		5FDCD6D76BBCE1FC60A59C00 /* ErrorBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1766D8FEC1DE43A8712D0D /* ErrorBanner.swift */; };
+		60248632041EBB9824D84E35 /* DepthEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432A66161FCCED14D07B9C5C /* DepthEstimator.swift */; };
 		605267688CCEC7835FF8B434 /* AuctionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FCC6033FDCE308EFEB8887 /* AuctionDetailView.swift */; };
 		61A0BB641E7B9A7D12D688CE /* CreateNFTView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D5512ADC9CDDC3D66FAD88 /* CreateNFTView.swift */; };
 		6AAA70A1E280645AF3129E3B /* WebSocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE3BE67BA53E04B2EEFEECCB /* WebSocketService.swift */; };
@@ -72,6 +74,7 @@
 		E8881FF5D294D2224F9D864A /* AuctionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0599F34AFC874F283BF3473E /* AuctionService.swift */; };
 		F06ADC7D861C73FCEDCC80C3 /* MockDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B37E1886CB338A423F7CF9 /* MockDataService.swift */; };
 		F36F8EA4CB18CBF4C6E4E3BC /* AuctionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7925BB2F904A469BE8DAFD3 /* AuctionCardView.swift */; };
+		FC1ED267EC175BEEEB118F94 /* TONConnectButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7572650A1F338618301B20 /* TONConnectButton.swift */; };
 		FC52EF421EB5357DEA0CA0C8 /* UserDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2E6AF71F83F4839A18A564 /* UserDetailView.swift */; };
 /* End PBXBuildFile section */
 
@@ -100,6 +103,7 @@
 		37D5512ADC9CDDC3D66FAD88 /* CreateNFTView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateNFTView.swift; sourceTree = "<group>"; };
 		39C8605E07C2E564452D1DED /* BidButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BidButton.swift; sourceTree = "<group>"; };
 		3E14F5739A0492E0672B09C1 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
+		432A66161FCCED14D07B9C5C /* DepthEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepthEstimator.swift; sourceTree = "<group>"; };
 		459BC452C8F2A71E1A9F7ACA /* AuctionService+MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AuctionService+MockData.swift"; sourceTree = "<group>"; };
 		47C9D405DA664DC15EF08852 /* ShowroomLayoutStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShowroomLayoutStore.swift; sourceTree = "<group>"; };
 		497B6E8A1E82DAB06D3A07CC /* AuctionsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuctionsListView.swift; sourceTree = "<group>"; };
@@ -145,6 +149,8 @@
 		E02F073A2E0C2EB6AB9151F5 /* View+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Extensions.swift"; sourceTree = "<group>"; };
 		E40C477B255CC582BF47C6B6 /* AdminAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAuthManager.swift; sourceTree = "<group>"; };
 		E51A2E05C48B309F0EF06CF9 /* ArtworkImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkImageView.swift; sourceTree = "<group>"; };
+		EB7572650A1F338618301B20 /* TONConnectButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TONConnectButton.swift; sourceTree = "<group>"; };
+		F5F9F9D5C27455AFFD66857F /* TONConnectService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TONConnectService.swift; sourceTree = "<group>"; };
 		F7454098F1869095BA66DC81 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -156,11 +162,13 @@
 				E51A2E05C48B309F0EF06CF9 /* ArtworkImageView.swift */,
 				39C8605E07C2E564452D1DED /* BidButton.swift */,
 				6BE89E2B27935438A8B7BE17 /* CountdownTimerView.swift */,
+				432A66161FCCED14D07B9C5C /* DepthEstimator.swift */,
 				1A1766D8FEC1DE43A8712D0D /* ErrorBanner.swift */,
 				94E582C05966DD22B080A491 /* FullScreen3DViewer.swift */,
 				71A3B6EE301F367C8EBFD30F /* ImagePicker.swift */,
 				1FFD22BD2E7748DFF108B143 /* NormalMapGenerator.swift */,
 				512F8A4346FC7BE2AEB1465E /* SkeletonView.swift */,
+				EB7572650A1F338618301B20 /* TONConnectButton.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -409,6 +417,7 @@
 				11B37E1886CB338A423F7CF9 /* MockDataService.swift */,
 				89966BF9F480458FBC83D40D /* NetworkService.swift */,
 				2F7FC4A537EDFFCD8FFC9EC1 /* PushNotificationService.swift */,
+				F5F9F9D5C27455AFFD66857F /* TONConnectService.swift */,
 				AE3BE67BA53E04B2EEFEECCB /* WebSocketService.swift */,
 			);
 			path = Services;
@@ -613,6 +622,7 @@
 				0E3073DB0B16758E4A15C7B3 /* CountdownTimerView.swift in Sources */,
 				61A0BB641E7B9A7D12D688CE /* CreateNFTView.swift in Sources */,
 				2A29AF86906DB9A1D4C981FC /* DepthAnythingV2SmallF16INT8.mlpackage in Sources */,
+				60248632041EBB9824D84E35 /* DepthEstimator.swift in Sources */,
 				5FDCD6D76BBCE1FC60A59C00 /* ErrorBanner.swift in Sources */,
 				B2DB01A9BA836889925DB369 /* ExploreView.swift in Sources */,
 				4CE25AEF7398CD3A785A2327 /* FeedView.swift in Sources */,
@@ -639,6 +649,8 @@
 				075DD3F05005E1981B0C4BF6 /* ShowroomScene.swift in Sources */,
 				6CED81B7605536C4890CF03F /* ShowroomView.swift in Sources */,
 				E57CA855E15775F15ABAAEE3 /* SkeletonView.swift in Sources */,
+				FC1ED267EC175BEEEB118F94 /* TONConnectButton.swift in Sources */,
+				2B2383EA687DD559171E4A3F /* TONConnectService.swift in Sources */,
 				5920E4002ABEBC7850AF7D76 /* Theme.swift in Sources */,
 				31B73CFF0A78E1D1CE2F54A9 /* User.swift in Sources */,
 				11E1F8291B2564DA33E4512D /* UserProfileView.swift in Sources */,

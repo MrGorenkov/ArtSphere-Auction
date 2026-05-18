@@ -112,3 +112,15 @@ struct AdminBid: Codable, Identifiable {
     let amount: Double
     let timestamp: String
 }
+
+/// 14-day rolling counts of created auctions and placed bids per calendar day —
+/// powers the activity chart on the admin dashboard.
+struct AdminTimeseries: Codable {
+    struct Point: Codable, Identifiable {
+        let day: String
+        let count: Int
+        var id: String { day }
+    }
+    let auctions: [Point]
+    let bids: [Point]
+}

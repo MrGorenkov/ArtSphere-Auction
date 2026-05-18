@@ -81,9 +81,13 @@ struct AuctionsListView: View {
 
             // Detail panel
             if let auction = selectedAuction {
-                AuctionDetailView(auction: auction, bids: bids, isLoadingBids: isLoadingBids) {
-                    cancelAuction(auction)
-                }
+                AuctionDetailView(
+                    auction: auction,
+                    bids: bids,
+                    isLoadingBids: isLoadingBids,
+                    onCancel: { cancelAuction(auction) },
+                    onDelete: { deleteAuction(auction) }
+                )
                 .frame(minWidth: 320, maxWidth: 420)
             } else {
                 VStack {
@@ -127,6 +131,17 @@ struct AuctionsListView: View {
                     auctions[idx] = updated
                 }
                 if selectedAuction?.id == auction.id { selectedAuction = updated }
+            } catch {}
+        }
+    }
+
+    private func deleteAuction(_ auction: AdminAuction) {
+        Task {
+            do {
+                try await AdminNetworkService.shared.deleteAuction(id: auction.id)
+                auctions.removeAll { $0.id == auction.id }
+                if selectedAuction?.id == auction.id { selectedAuction = nil }
+                bids = []
             } catch {}
         }
     }

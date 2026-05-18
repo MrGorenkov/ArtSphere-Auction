@@ -13,6 +13,9 @@ struct AuctionController: RouteCollection {
     }
 
     // GET /api/v1/auctions?status=active
+    // Default response excludes finished / expired auctions so the feed
+    // never shows lots that already ended. Pass `?status=sold` or
+    // `?status=ended` explicitly to retrieve those (e.g. for history view).
     func index(req: Request) async throws -> [AuctionDTO] {
         let status = req.query[String.self, at: "status"]
 
@@ -20,6 +23,17 @@ struct AuctionController: RouteCollection {
 
         if let status = status {
             query = query.filter(\.$status == status)
+            // When asking for active lots, also drop the ones whose timer
+            // already ran out. The client may not have run finalization yet,
+            // but a stale lot must not appear in the live feed.
+            if status == "active" {
+                query = query.filter(\.$endTime > Date())
+            }
+        } else {
+            // No filter requested -> only return what is actually live.
+            query = query
+                .filter(\.$status == "active")
+                .filter(\.$endTime > Date())
         }
 
         let auctions = try await query

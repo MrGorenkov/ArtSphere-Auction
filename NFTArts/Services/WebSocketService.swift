@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 // MARK: - WebSocketService
 
@@ -33,6 +34,9 @@ final class WebSocketService: ObservableObject {
 
     private var feedReconnectAttempts: Int = 0
     private var currentUserId: String?
+    /// Survives backgrounding so we know who to re-subscribe on resume.
+    private var lastSubscribedUserId: String?
+    private var feedWasActive: Bool = false
     private var userReconnectAttempts: Int = 0
     private static let maxReconnectAttempts = 5
     private static let reconnectBaseDelay: TimeInterval = 1.0
@@ -53,6 +57,40 @@ final class WebSocketService: ObservableObject {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
         self.session = URLSession(configuration: config)
+        observeAppLifecycle()
+    }
+
+    /// Reconnects both channels when the app returns to the foreground, and shuts them
+    /// down cleanly when the app goes to background — iOS closes idle TCP sockets after
+    /// ~30 s, so without this hook the user comes back to a feed that silently stops
+    /// receiving real-time bid updates.
+    private func observeAppLifecycle() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            if self.feedWasActive && !self.isFeedConnected {
+                self.subscribeToAuctionFeed()
+            }
+            if let userId = self.lastSubscribedUserId, !self.isUserConnected {
+                self.subscribeToUser(userId)
+            }
+        }
+        center.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            // Remember what was active so we can restore it on resume.
+            self.feedWasActive = self.isFeedConnected
+            self.lastSubscribedUserId = self.currentUserId ?? self.lastSubscribedUserId
+            // Clean shutdown so the server doesn't keep a dead socket alive.
+            self.disconnectAll()
+        }
     }
 
     // MARK: - Global Auction Feed

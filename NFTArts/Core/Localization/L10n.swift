@@ -52,7 +52,7 @@ enum L10n {
 
     // MARK: - Feed
     static var feedTitle: String { isRu ? "NFT Арт" : "NFT Arts" }
-    static var featured: String { isRu ? "Популярное" : "Featured" }
+    static var featured: String { isRu ? "Скоро завершатся" : "Ending soon" }
     static var searchArtworks: String { isRu ? "Поиск произведений..." : "Search artworks..." }
     static var auctionWon: String { isRu ? "Аукцион выигран!" : "Auction Won!" }
     static var youWon: String { isRu ? "Вы выиграли" : "You won" }
@@ -205,7 +205,7 @@ enum L10n {
     static var showroomCameraWalk: String { isRu ? "Прогулка" : "Walk" }
 
     // MARK: - Featured / Sort / Filter
-    static var featuredBadge: String { isRu ? "ХИТ" : "FEATURED" }
+    static var featuredBadge: String { isRu ? "ФИНАЛ" : "ENDING" }
     static var sortBy: String { isRu ? "Сортировка" : "Sort by" }
     static var sortRecent: String { isRu ? "Сначала новые" : "Most recent" }
     static var sortHighestBid: String { isRu ? "По ставке (макс.)" : "Highest bid" }

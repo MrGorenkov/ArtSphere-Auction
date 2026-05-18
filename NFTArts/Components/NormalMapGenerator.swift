@@ -3,6 +3,25 @@ import Accelerate
 
 enum NormalMapGenerator {
 
+    // MARK: - Algorithm
+
+    /// Choice of edge-detection algorithm used to extract surface relief from a flat image.
+    ///
+    /// - `sobel`: classic first-derivative gradient filter (3×3, separable Gx/Gy). Cheap,
+    ///   robust, but misses fine details and produces broad edges.
+    /// - `laplacian`: second-derivative Marr–Hildreth (Laplacian of Gaussian). Reacts to
+    ///   curvature changes rather than slopes — picks up thin brush strokes and texture
+    ///   transitions Sobel smooths over, at the cost of being more noise-sensitive
+    ///   (we already pre-blur with a 3×3 Gaussian, which is exactly the "LoG" pipeline).
+    enum FilterAlgorithm: String {
+        case sobel
+        case laplacian
+    }
+
+    /// Default algorithm for new generations. Switched to Laplacian (LoG variant) per
+    /// post-review feedback — gives sharper relief on brush-stroke textures than Sobel.
+    static var defaultAlgorithm: FilterAlgorithm = .laplacian
+
     // MARK: - Cache
 
     /// Caches per-artwork derived images. Keyed by stable identifier (e.g., artwork id).

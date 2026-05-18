@@ -40,11 +40,18 @@ struct Auction: Identifiable, Hashable {
         String(format: "%.2f ETH", currentBid)
     }
 
+    /// Smallest bid the server will accept.
+    ///
+    /// For a lot that has never been bid on, `currentBid` sits at zero, so
+    /// `currentBid + step` would let the user submit a tiny amount that the
+    /// server then rejects with HTTP 400 ("Bid must be at least starting_price").
+    /// Anchor on `startingPrice` until the first real bid arrives.
     var minimumNextBid: Double {
+        let base = max(currentBid, startingPrice)
         if let step = bidStep {
-            return currentBid + step
+            return currentBid > 0 ? currentBid + step : base
         }
-        return currentBid + max(currentBid * 0.05, 0.01)
+        return base + max(base * 0.05, 0.01)
     }
 
     var isReserveMet: Bool {

@@ -2,7 +2,7 @@ import Foundation
 
 class AdminNetworkService {
     static let shared = AdminNetworkService()
-    private let baseURL = "http://172.20.10.2:8080/api/v1"
+    private let baseURL = "http://localhost:8080/api/v1"
     var token: String?
 
     private init() {}

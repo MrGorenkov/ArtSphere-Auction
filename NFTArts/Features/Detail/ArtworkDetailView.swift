@@ -1,9 +1,19 @@
 import SwiftUI
 
 struct ArtworkDetailView: View {
-    let auction: Auction
+    let initialAuction: Auction
     @EnvironmentObject var auctionService: AuctionService
     @EnvironmentObject var lang: LanguageManager
+
+    init(auction: Auction) {
+        self.initialAuction = auction
+    }
+
+    /// Always read the live auction (with up-to-date bids + currentBid) from the service
+    /// so that new bids appear instantly in the bids tab after placement.
+    private var auction: Auction {
+        auctionService.auctions.first(where: { $0.id == initialAuction.id }) ?? initialAuction
+    }
     @State private var selectedTab: DetailTab = .overview
     @State private var show3DView = false
     @State private var showFullscreen3D = false

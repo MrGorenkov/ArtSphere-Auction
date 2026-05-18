@@ -43,7 +43,7 @@ final class WebSocketService: ObservableObject {
         #if targetEnvironment(simulator)
         return "ws://localhost:8080"
         #else
-        return "ws://192.168.1.67:8080"
+        return "ws://172.20.10.2:8080"
         #endif
     }
 

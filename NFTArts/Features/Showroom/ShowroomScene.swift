@@ -187,13 +187,14 @@ enum ShowroomSceneBuilder {
         lightNode.name = "showroom_picture_light"
         let light = SCNLight()
         light.type = .spot
-        light.intensity = 750
-        light.spotInnerAngle = 30
-        light.spotOuterAngle = 55
+        // Whisper-soft accent — almost imperceptible warm glow on the canvas top.
+        light.intensity = 25
+        light.spotInnerAngle = 50
+        light.spotOuterAngle = 90
         light.color = UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0) // warm halogen
-        light.castsShadow = true
-        light.shadowRadius = 3
-        light.shadowSampleCount = 12
+        light.attenuationStartDistance = 0.5
+        light.attenuationEndDistance = 3.5
+        light.castsShadow = false // soft fill, shadowless to keep painting evenly lit
         lightNode.light = light
 
         // Lamp sits just above the top of the frame, offset 0.7 m into the room for a 30°+ angle.
@@ -377,21 +378,21 @@ enum ShowroomSceneBuilder {
             ambientIntensity = 320
             ambientColor = UIColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1.0)
             fillIntensity = 350
-            pictureIntensity = 600
+            pictureIntensity = 25
             pictureColor = UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0)
         case .day:
             bgColor = UIColor(red: 0.78, green: 0.86, blue: 0.95, alpha: 1.0)
             ambientIntensity = 700
             ambientColor = UIColor(white: 1.0, alpha: 1.0)
             fillIntensity = 600
-            pictureIntensity = 350
+            pictureIntensity = 10
             pictureColor = UIColor(red: 1.0, green: 0.99, blue: 0.96, alpha: 1.0)
         case .night:
             bgColor = UIColor(red: 0.02, green: 0.03, blue: 0.06, alpha: 1.0)
             ambientIntensity = 90
             ambientColor = UIColor(red: 0.5, green: 0.55, blue: 0.7, alpha: 1.0)
             fillIntensity = 80
-            pictureIntensity = 900
+            pictureIntensity = 60
             pictureColor = UIColor(red: 1.0, green: 0.88, blue: 0.65, alpha: 1.0)
         }
 

@@ -9,7 +9,7 @@ enum APIConfig {
         return "http://localhost:8080/api/v1"
         #else
         // Physical device on the same Wi-Fi as the host running docker compose.
-        return "http://192.168.1.67:8080/api/v1"
+        return "http://172.20.10.2:8080/api/v1"
         #endif
     }
 
@@ -463,6 +463,18 @@ struct APIBid: Codable, Identifiable {
     let timestamp: String
 }
 
+/// Server-generated NFT token (simulated mint).
+struct APINFTToken: Codable, Identifiable {
+    let id: String
+    let artworkId: String
+    let ownerId: String
+    let contractAddress: String
+    let tokenIdOnChain: String
+    let blockchain: String
+    let status: String
+    let mintedAt: String
+}
+
 struct APICollection: Codable, Identifiable {
     let id: String
     let name: String
@@ -773,9 +785,12 @@ extension NetworkService {
         try await request(endpoint: "nft/my-tokens")
     }
 
-    func mintNFT(artworkId: String) async throws -> APIArtwork {
-        struct Body: Codable { let artworkId: String }
-        return try await request(endpoint: "nft/mint", method: .post, body: Body(artworkId: artworkId))
+    /// Server-side mint: generates a simulated contract address and on-chain token ID,
+    /// records the token under `nft_tokens` linked to the artwork and owner.
+    @discardableResult
+    func mintNFT(artworkId: String, blockchain: String? = nil) async throws -> APINFTToken {
+        struct Body: Codable { let artworkId: String; let blockchain: String? }
+        return try await request(endpoint: "nft/mint", method: .post, body: Body(artworkId: artworkId, blockchain: blockchain))
     }
 
     // MARK: Messages

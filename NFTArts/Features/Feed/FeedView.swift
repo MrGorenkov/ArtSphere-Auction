@@ -8,7 +8,7 @@ struct FeedView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView(.vertical, showsIndicators: false) {
+            ScrollView(.vertical) {
                 VStack(spacing: 0) {
                     // Notifications banner
                     notificationBanner
@@ -27,6 +27,7 @@ struct FeedView: View {
                 }
             }
             .scrollDismissesKeyboard(.immediately)
+            .scrollIndicators(.visible)
             .navigationTitle(L10n.feedTitle)
             .searchable(text: $viewModel.searchText, prompt: L10n.searchArtworks)
             .refreshable {

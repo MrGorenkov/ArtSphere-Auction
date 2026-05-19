@@ -176,7 +176,7 @@ struct ArtworkCard: View {
 
                 HStack {
                     if let price = artwork.price {
-                        Text(String(format: "%.2f ETH", price))
+                        Text(String(format: "%.2f TON", price))
                             .font(.caption)
                             .fontWeight(.medium)
                     }

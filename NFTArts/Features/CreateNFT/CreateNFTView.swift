@@ -14,7 +14,7 @@ struct CreateNFTView: View {
     @State private var startingPrice = ""
     @State private var buyNowPrice = ""
     @State private var durationHours: Double = 24
-    @State private var blockchain: NFTArtwork.BlockchainNetwork = .polygon
+    @State private var blockchain: NFTArtwork.BlockchainNetwork = .ton
 
     @State private var currentStep: CreateStep = .upload
     @State private var isProcessing = false
@@ -234,7 +234,7 @@ struct CreateNFTView: View {
                     TextField("0.01", text: $startingPrice)
                         .textFieldStyle(.plain)
                         .keyboardType(.decimalPad)
-                    Text("ETH")
+                    Text("TON")
                         .font(NFTTypography.headline)
                         .foregroundStyle(.secondary)
                 }
@@ -252,7 +252,7 @@ struct CreateNFTView: View {
                     TextField("—", text: $buyNowPrice)
                         .textFieldStyle(.plain)
                         .keyboardType(.decimalPad)
-                    Text("ETH")
+                    Text("TON")
                         .font(NFTTypography.headline)
                         .foregroundStyle(.secondary)
                 }
@@ -314,9 +314,9 @@ struct CreateNFTView: View {
                 summaryRow(L10n.title, value: title)
                 summaryRow(L10n.category, value: L10n.categoryName(category))
                 summaryRow(L10n.blockchain, value: blockchain.rawValue)
-                summaryRow(L10n.startingPriceLabel, value: "\(startingPrice) ETH")
+                summaryRow(L10n.startingPriceLabel, value: "\(startingPrice) TON")
                 if !buyNowPrice.isEmpty, let _ = Double(buyNowPrice) {
-                    summaryRow(L10n.buyNowPrice, value: "\(buyNowPrice) ETH")
+                    summaryRow(L10n.buyNowPrice, value: "\(buyNowPrice) TON")
                 }
                 summaryRow(L10n.durationLabel, value: L10n.durationHoursValue(Int(durationHours)))
             }
@@ -434,8 +434,10 @@ struct CreateNFTView: View {
                     )
                     _ = try await network.createAuction(request: auctionReq)
 
-                    // 4. Mint NFT token: server generates a contract address + on-chain ID
-                    //    and writes the record into nft_tokens.
+                    // 4. Mint NFT token.
+                    //    Бэкенд через minter-сервис от имени owner-кошелька шлёт MintNFT
+                    //    в контракт ArtSphereCollection в TON Testnet. tokenIdOnChain — это
+                    //    реальное значение next_item_index, прочитанное get-методом контракта.
                     do {
                         let token = try await network.mintNFT(
                             artworkId: apiArtwork.id,
@@ -446,7 +448,7 @@ struct CreateNFTView: View {
                             "contract": token.contractAddress
                         ])
                     } catch {
-                        // Minting is non-fatal: the auction itself is already on the server.
+                        // Mint фейл не критичен: аукцион уже сохранён на сервере.
                         print("NFT mint failed: \(error)")
                     }
 

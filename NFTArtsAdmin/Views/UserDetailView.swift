@@ -44,7 +44,7 @@ struct UserDetailView: View {
                 // Info rows
                 DetailRow(label: "Email", value: user.email ?? "—")
                 DetailRow(label: "Wallet", value: String(user.walletAddress.prefix(12)) + "...")
-                DetailRow(label: "Баланс", value: String(format: "%.2f ETH", user.balance))
+                DetailRow(label: "Баланс", value: String(format: "%.2f TON", user.balance))
                 DetailRow(label: "Статус", value: user.isActive ? "Активен" : "Заблокирован")
                 DetailRow(label: "Артворков", value: "\(user.artworksCount)")
                 DetailRow(label: "Ставок", value: "\(user.bidsCount)")

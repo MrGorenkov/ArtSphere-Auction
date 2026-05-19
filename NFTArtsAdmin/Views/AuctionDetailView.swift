@@ -45,12 +45,12 @@ struct AuctionDetailView: View {
                 Divider()
 
                 // Info
-                DetailRow(label: "Начальная", value: String(format: "%.2f ETH", auction.startingPrice))
-                DetailRow(label: "Текущая", value: String(format: "%.2f ETH", auction.currentBid))
+                DetailRow(label: "Начальная", value: String(format: "%.2f TON", auction.startingPrice))
+                DetailRow(label: "Текущая", value: String(format: "%.2f TON", auction.currentBid))
                 if let reserve = auction.reservePrice {
-                    DetailRow(label: "Резерв", value: String(format: "%.2f ETH", reserve))
+                    DetailRow(label: "Резерв", value: String(format: "%.2f TON", reserve))
                 }
-                DetailRow(label: "Шаг", value: String(format: "%.3f ETH", auction.bidStep))
+                DetailRow(label: "Шаг", value: String(format: "%.3f TON", auction.bidStep))
                 DetailRow(label: "Ставок", value: "\(auction.bidCount)")
                 DetailRow(label: "Начало", value: formatDate(auction.startTime))
                 DetailRow(label: "Конец", value: formatDate(auction.endTime))
@@ -119,7 +119,7 @@ struct AuctionDetailView: View {
 
                             Spacer()
 
-                            Text(String(format: "%.3f ETH", bid.amount))
+                            Text(String(format: "%.3f TON", bid.amount))
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.purple)

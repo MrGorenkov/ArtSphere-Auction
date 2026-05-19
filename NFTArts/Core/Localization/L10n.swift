@@ -97,7 +97,7 @@ enum L10n {
     static var auctionNotFound: String { isRu ? "Аукцион не найден" : "Auction not found" }
     static var auctionNoLongerActive: String { isRu ? "Аукцион больше не активен" : "Auction is no longer active" }
     static func bidMinimumError(_ amount: String) -> String {
-        isRu ? "Ставка должна быть не менее \(amount) ETH" : "Bid must be at least \(amount) ETH"
+        isRu ? "Ставка должна быть не менее \(amount) TON" : "Bid must be at least \(amount) TON"
     }
     static var insufficientBalance: String { isRu ? "Недостаточно средств" : "Insufficient balance" }
     static var bids: String { isRu ? "Ставки" : "Bids" }

@@ -67,7 +67,7 @@ CREATE TABLE artworks (
     price            DOUBLE PRECISION,                         -- цена за токены
     is_for_sale      BOOLEAN DEFAULT TRUE,                   -- доступность для продажи
     style_id         UUID REFERENCES art_styles(id) ON DELETE SET NULL,
-    blockchain       VARCHAR(20) NOT NULL DEFAULT 'Polygon',
+    blockchain       VARCHAR(20) NOT NULL DEFAULT 'TON',
     metadata_json    TEXT DEFAULT '{}',
     creator_id       UUID REFERENCES users(id) ON DELETE SET NULL,
     is_published     BOOLEAN DEFAULT TRUE,
@@ -114,7 +114,7 @@ CREATE TABLE nft_tokens (
     owner_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     contract_address VARCHAR(42) NOT NULL,                   -- адрес контракта NFT
     token_id_on_chain VARCHAR(100),                          -- ID токена в блокчейне
-    blockchain       VARCHAR(20) NOT NULL DEFAULT 'Polygon', -- блокчейн
+    blockchain       VARCHAR(20) NOT NULL DEFAULT 'TON',     -- блокчейн
     status           VARCHAR(20) NOT NULL DEFAULT 'minted',  -- статус токена
     minted_at        TIMESTAMPTZ DEFAULT NOW(),               -- дата+время эмиссии
     metadata_uri     TEXT,                                    -- URI метаданных (IPFS/MinIO)

@@ -1,9 +1,9 @@
 node_modules
 temp
-build
 dist
 .DS_Store
 package.ts
+# build/ нужен в репо — minter-service использует сгенерированный Tact wrapper
 
 # VS Code
 .vscode/*

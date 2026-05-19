@@ -505,7 +505,7 @@ struct ArtworkDetailView: View {
                             .font(NFTTypography.caption)
                             .foregroundStyle(.nftGreen)
                         if let max = auctionService.autoBrokerSettings[auctionService.currentUser.id]?[auction.id] {
-                            Text(String(format: "— %.2f ETH", max))
+                            Text(String(format: "— %.2f TON", max))
                                 .font(NFTTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -725,17 +725,17 @@ struct ArtworkDetailView: View {
 
     private var detailsContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            InfoRow(icon: "dollarsign.circle", title: L10n.startingPrice, value: String(format: "%.2f ETH", auction.startingPrice))
+            InfoRow(icon: "dollarsign.circle", title: L10n.startingPrice, value: String(format: "%.2f TON", auction.startingPrice))
             if let reserve = auction.reservePrice {
-                InfoRow(icon: "lock.fill", title: L10n.reservePrice, value: String(format: "%.2f ETH", reserve))
+                InfoRow(icon: "lock.fill", title: L10n.reservePrice, value: String(format: "%.2f TON", reserve))
             }
             if let buyNow = auction.buyNowPrice {
-                InfoRow(icon: "bolt.fill", title: L10n.buyNowPrice, value: String(format: "%.2f ETH", buyNow))
+                InfoRow(icon: "bolt.fill", title: L10n.buyNowPrice, value: String(format: "%.2f TON", buyNow))
             }
             InfoRow(icon: "clock.fill", title: L10n.started, value: auction.startTime.formatted(date: .abbreviated, time: .shortened))
             InfoRow(icon: "clock.badge.checkmark.fill", title: L10n.ends, value: auction.endTime.formatted(date: .abbreviated, time: .shortened))
             InfoRow(icon: "number", title: L10n.totalBids, value: "\(auction.bidCount)")
-            InfoRow(icon: "arrow.up.right", title: L10n.minNextBid, value: String(format: "%.2f ETH", auction.minimumNextBid))
+            InfoRow(icon: "arrow.up.right", title: L10n.minNextBid, value: String(format: "%.2f TON", auction.minimumNextBid))
             if let score = auction.artwork.textureComplexityScore {
                 InfoRow(icon: "waveform.path.ecg", title: L10n.textureComplexity, value: String(format: "%.0f%%", score * 100))
             }
@@ -875,7 +875,7 @@ struct AutoBrokerSheet: View {
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.plain)
 
-                        Text("ETH")
+                        Text("TON")
                             .font(NFTTypography.headline)
                             .foregroundStyle(.secondary)
                     }
@@ -883,7 +883,7 @@ struct AutoBrokerSheet: View {
                     .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                    Text(L10n.minimumBid + ": \(String(format: "%.2f ETH", auction.minimumNextBid))")
+                    Text(L10n.minimumBid + ": \(String(format: "%.2f TON", auction.minimumNextBid))")
                         .font(NFTTypography.caption)
                         .foregroundStyle(.secondary)
                 }

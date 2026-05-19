@@ -15,7 +15,7 @@ struct ShowroomView: View {
     @State private var showHint = true
     @State private var scene: SCNScene?
     @State private var cameraMode: CameraMode = .orbit
-    @State private var lighting: LightingMode = .gallery
+    @AppStorage("showroom_theme") private var themeRaw: String = ShowroomTheme.louvre.rawValue
     @State private var tappedPainting: PaintingTap?
     @State private var rearrangeMode: Bool = false
     @State private var firstSelectedId: UUID?
@@ -23,28 +23,14 @@ struct ShowroomView: View {
     @State private var showResetConfirm: Bool = false
     @State private var transientToast: String?
 
+    private var theme: ShowroomTheme {
+        ShowroomTheme(rawValue: themeRaw) ?? .louvre
+    }
+
     enum CameraMode {
         case orbit, walk
         var icon: String { self == .orbit ? "arrow.triangle.2.circlepath" : "figure.walk" }
         var sceneKitMode: SCNInteractionMode { self == .orbit ? .orbitTurntable : .fly }
-    }
-
-    enum LightingMode {
-        case gallery, day, night
-        var icon: String {
-            switch self {
-            case .gallery: return "lightbulb.fill"
-            case .day:     return "sun.max.fill"
-            case .night:   return "moon.fill"
-            }
-        }
-        var next: LightingMode {
-            switch self {
-            case .gallery: return .day
-            case .day:     return .night
-            case .night:   return .gallery
-            }
-        }
     }
 
     /// Identifiable wrapper so we can use `.fullScreenCover(item:)`.
@@ -137,12 +123,23 @@ struct ShowroomView: View {
                     .lineLimit(1)
             }
             Spacer()
-            Button {
-                HapticService.light()
-                withAnimation { lighting = lighting.next }
-                controller.applyLighting(lighting)
+            Menu {
+                ForEach(ShowroomTheme.allCases) { option in
+                    Button {
+                        HapticService.light()
+                        themeRaw = option.rawValue
+                        rebuildScene()
+                        showToast(option.displayName)
+                    } label: {
+                        if option == theme {
+                            Label(option.displayName, systemImage: "checkmark")
+                        } else {
+                            Label(option.displayName, systemImage: option.icon)
+                        }
+                    }
+                }
             } label: {
-                iconButton(lighting.icon)
+                iconButton(theme.icon)
             }
             Button {
                 HapticService.medium()
@@ -327,12 +324,13 @@ struct ShowroomView: View {
     private func buildScene() async {
         let ordered = ShowroomLayoutStore.ordered(artworks, collectionId: collectionId)
         let snapshot = ordered
+        let currentTheme = theme
         paintingOrder = snapshot.map(\.id)
         let scene = await Task.detached(priority: .userInitiated) {
-            ShowroomSceneBuilder.build(artworks: snapshot)
+            ShowroomSceneBuilder.build(artworks: snapshot, theme: currentTheme)
         }.value
         self.scene = scene
-        AnalyticsService.shared.track(.showroomOpened, parameters: ["count": snapshot.count])
+        AnalyticsService.shared.track(.showroomOpened, parameters: ["count": snapshot.count, "theme": currentTheme.rawValue])
     }
 }
 
@@ -398,11 +396,6 @@ final class ShowroomController: ObservableObject {
             scnView.pointOfView?.position = SCNVector3(0, 1.7, 0)
             scnView.pointOfView?.eulerAngles = SCNVector3(0, 0, 0)
         }
-    }
-
-    func applyLighting(_ mode: ShowroomView.LightingMode) {
-        guard let scene = scnView?.scene else { return }
-        ShowroomSceneBuilder.applyLighting(mode, to: scene)
     }
 
     /// Swaps the wall positions of two paintings in-place (no scene rebuild).

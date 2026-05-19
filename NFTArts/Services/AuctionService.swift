@@ -278,7 +278,7 @@ final class AuctionService: ObservableObject {
                 let nextBid = auctions[index].minimumNextBid
                 if nextBid <= maxAmount {
                     _ = placeBid(on: auctionId, amount: nextBid)
-                    addNotification(title: L10n.autoBrokerTitle, message: L10n.autoBrokerPlaced(String(format: "%.2f ETH", nextBid)), type: .bidPlaced)
+                    addNotification(title: L10n.autoBrokerTitle, message: L10n.autoBrokerPlaced(String(format: "%.2f TON", nextBid)), type: .bidPlaced)
                 } else {
                     autoBrokerSettings[userId]?[auctionId] = nil
                     addNotification(title: L10n.autoBrokerTitle, message: L10n.autoBrokerLimitReached, type: .bidPlaced)
@@ -524,7 +524,7 @@ final class AuctionService: ObservableObject {
                 do {
                     let apiBid = try await network.placeBid(request: APIPlaceBidRequest(auctionId: auctionId.uuidString, amount: amount))
                     await MainActor.run {
-                        self.addNotification(title: L10n.bidPlaced, message: L10n.bidPlacedNotif(String(format: "%.2f ETH", apiBid.amount), artworkTitle), type: .bidPlaced)
+                        self.addNotification(title: L10n.bidPlaced, message: L10n.bidPlacedNotif(String(format: "%.2f TON", apiBid.amount), artworkTitle), type: .bidPlaced)
                     }
                 } catch let apiError as APIError {
                     await MainActor.run {
@@ -587,7 +587,7 @@ final class AuctionService: ObservableObject {
             wonAuctions.append(auctions[index])
         }
 
-        addNotification(title: L10n.buyNowSuccess, message: L10n.buyNowNotif(auction.artwork.title, String(format: "%.2f ETH", buyNowPrice)), type: .auctionWon)
+        addNotification(title: L10n.buyNowSuccess, message: L10n.buyNowNotif(auction.artwork.title, String(format: "%.2f TON", buyNowPrice)), type: .auctionWon)
 
         if isOnline {
             Task {
@@ -610,7 +610,7 @@ final class AuctionService: ObservableObject {
             autoBrokerSettings[userId] = [:]
         }
         autoBrokerSettings[userId]?[auctionId] = maxAmount
-        addNotification(title: L10n.autoBrokerTitle, message: L10n.autoBrokerSet(String(format: "%.2f ETH", maxAmount)), type: .bidPlaced)
+        addNotification(title: L10n.autoBrokerTitle, message: L10n.autoBrokerSet(String(format: "%.2f TON", maxAmount)), type: .bidPlaced)
 
         if isOnline {
             Task {

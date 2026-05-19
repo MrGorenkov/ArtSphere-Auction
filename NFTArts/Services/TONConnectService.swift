@@ -1,56 +1,133 @@
 import Foundation
 import Combine
+import UIKit
 
+/// Управляет подключением TON-кошелька пользователя (testnet) и периодически
+/// подтягивает реальный баланс через публичный Toncenter API.
+///
+/// Архитектура (pragmatic, без полного TON Connect Bridge SDK):
+/// 1. Юзер открывает Tonkeeper deep-link → копирует свой testnet адрес.
+/// 2. Возвращается в наше приложение → вставляет адрес в шит подключения.
+/// 3. Адрес валидируется по формату и сохраняется в UserDefaults.
+/// 4. Сервис подписан на периодический refresh — баланс из реальной testnet-цепочки.
+///
+/// Для mint NFT генерируется `ton://transfer/<contract>?...` deep-link — Tonkeeper подтверждает
+/// и шлёт реальную транзакцию в testnet. Видно на `testnet.tonviewer.com`.
+@MainActor
 final class TONConnectService: ObservableObject {
     static let shared = TONConnectService()
-    
-    @Published var isConnected: Bool = false
-    @Published var walletAddress: String?
-    
-    // Временный ID сессии для TON Connect
-    private let clientId = UUID().uuidString.lowercased()
-    
-    // URL, где лежит наш манифест (генерируется Vapor-бэкендом)
-    private var manifestUrl: String {
-        return "\(APIConfig.baseURL)/tonconnect-manifest.json"
+
+    // MARK: - Published state
+
+    @Published private(set) var walletAddress: String?
+    @Published private(set) var balanceTON: Double?
+    @Published private(set) var isLoadingBalance: Bool = false
+    @Published private(set) var lastError: String?
+
+    var isConnected: Bool { walletAddress != nil }
+
+    // MARK: - Storage
+
+    private let addressKey = "ton_wallet_address_v1"
+    private let defaults = UserDefaults.standard
+
+    // MARK: - Polling
+
+    private var refreshTask: Task<Void, Never>?
+    private let refreshInterval: TimeInterval = 30
+
+    // MARK: - Init
+
+    private init() {
+        self.walletAddress = defaults.string(forKey: addressKey)
+        if walletAddress != nil {
+            startBalancePolling()
+        }
     }
 
-    /// Генерирует универсальную ссылку для открытия Tonkeeper
-    func generateConnectDeepLink() -> URL? {
-        // Формируем payload запроса на подключение
-        let requestDict: [String: Any] = [
-            "manifestUrl": manifestUrl,
-            "items": [
-                [
-                    "name": "ton_addr"
-                ]
-            ]
-        ]
-        
-        guard let requestData = try? JSONSerialization.data(withJSONObject: requestDict),
-              let requestJson = String(data: requestData, encoding: .utf8),
-              let encodedRequest = requestJson.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            return nil
-        }
-        
-        // Deep-link схема для Tonkeeper с протоколом TON Connect (v=2)
-        let urlString = "tonkeeper://tc?v=2&id=\(clientId)&r=\(encodedRequest)"
-        return URL(string: urlString)
-    }
-    
-    /// Имитация обработки ответа от Tonkeeper (т.к. для полного цикла нужно поднимать SSE-соединение или Bridge)
-    /// Для тестового стенда мы мокаем успешное подключение тестового кошелька после возврата из Tonkeeper
-    func handleDeepLinkCallback(address: String) {
-        DispatchQueue.main.async {
-            self.walletAddress = address
-            self.isConnected = true
+    // MARK: - Connect / Disconnect
+
+    /// Открывает Tonkeeper по universal link.
+    func openTonkeeper() {
+        if let url = URL(string: "https://app.tonkeeper.com/") {
+            UIApplication.shared.open(url)
         }
     }
-    
+
+    /// Бесплатные тестовые TON через Telegram-бота.
+    func openTestnetFaucet() {
+        if let url = URL(string: "https://t.me/testgiver_ton_bot") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    /// Подключает кошелёк по вставленному пользователем адресу.
+    @discardableResult
+    func connect(address rawInput: String) -> Bool {
+        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard TONAddress.isValid(trimmed) else {
+            lastError = "Некорректный адрес кошелька"
+            return false
+        }
+        lastError = nil
+        walletAddress = trimmed
+        defaults.set(trimmed, forKey: addressKey)
+        startBalancePolling()
+        Task { await refreshBalance() }
+        return true
+    }
+
     func disconnect() {
-        DispatchQueue.main.async {
-            self.walletAddress = nil
-            self.isConnected = false
+        refreshTask?.cancel()
+        refreshTask = nil
+        walletAddress = nil
+        balanceTON = nil
+        lastError = nil
+        defaults.removeObject(forKey: addressKey)
+    }
+
+    /// Адрес задеплоенной NFT-коллекции в TON Testnet (Tact-контракт ArtSphereCollection).
+    /// Backend mint'ит NFT в этот контракт от имени owner-кошелька — юзеру TON для этого не нужны.
+    static let collectionAddress = "kQAOK4YRtEimfHBDRKeM0DRN_BLTh4GyiyqqaGcHArpCF7Ji"
+
+    // MARK: - Balance
+
+    func refreshBalance() async {
+        guard let address = walletAddress else { return }
+        isLoadingBalance = true
+        defer { isLoadingBalance = false }
+
+        do {
+            let nano = try await ToncenterClient.fetchBalance(address: address)
+            self.balanceTON = Double(nano) / 1_000_000_000.0
+        } catch {
+            self.lastError = "Не удалось получить баланс: \(error.localizedDescription)"
         }
+    }
+
+    private func startBalancePolling() {
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await self.refreshBalance()
+                try? await Task.sleep(nanoseconds: UInt64(self.refreshInterval * 1_000_000_000))
+            }
+        }
+    }
+}
+
+// MARK: - Address validation
+
+enum TONAddress {
+    /// User-friendly формат: EQ/UQ/kQ/0Q + base64url, ровно 48 символов.
+    /// CRC16 не проверяется — Toncenter всё равно вернёт ошибку на невалидный адрес.
+    static func isValid(_ address: String) -> Bool {
+        guard address.count == 48 else { return false }
+        let prefix = address.prefix(2)
+        guard ["EQ", "UQ", "kQ", "0Q"].contains(String(prefix)) else { return false }
+        let allowed = CharacterSet(charactersIn:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+        return address.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
 }

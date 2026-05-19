@@ -70,7 +70,7 @@ final class MetricsService {
     }
 
     func trackBidPlaced(amount: Double, auctionId: String) {
-        record(category: "interaction", name: "bid_placed", value: amount, unit: "ETH", metadata: ["auction_id": auctionId])
+        record(category: "interaction", name: "bid_placed", value: amount, unit: "TON", metadata: ["auction_id": auctionId])
     }
 
     func trackShowroomEnter(artworkCount: Int) {

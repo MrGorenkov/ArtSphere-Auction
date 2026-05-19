@@ -185,7 +185,7 @@ struct AuctionRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(String(format: "%.2f ETH", auction.currentBid > 0 ? auction.currentBid : auction.startingPrice))
+                Text(String(format: "%.2f TON", auction.currentBid > 0 ? auction.currentBid : auction.startingPrice))
                     .font(.subheadline)
                     .fontWeight(.medium)
 

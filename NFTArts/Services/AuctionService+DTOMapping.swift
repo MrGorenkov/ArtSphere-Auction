@@ -8,7 +8,7 @@ extension AuctionService {
     static func mapArtworkDTO(_ api: APIArtwork) -> NFTArtwork {
         let category = mapStyleToCategoryName(api.styleName)
         let imageSource: NFTArtwork.ImageSource = api.imageUrl != nil ? .url : .procedural
-        let blockchain: NFTArtwork.BlockchainNetwork = api.blockchain == "Ethereum" ? .ethereum : .polygon
+        let blockchain: NFTArtwork.BlockchainNetwork = NFTArtwork.BlockchainNetwork(rawValue: api.blockchain) ?? .ton
 
         return NFTArtwork(
             id: UUID(uuidString: api.id) ?? UUID(),

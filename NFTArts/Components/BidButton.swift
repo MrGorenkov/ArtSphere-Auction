@@ -138,7 +138,7 @@ struct PlaceBidSheet: View {
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.plain)
 
-                        Text("ETH")
+                        Text("TON")
                             .font(NFTTypography.headline)
                             .foregroundStyle(.secondary)
                     }
@@ -146,7 +146,7 @@ struct PlaceBidSheet: View {
                     .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                    Text(L10n.minimumBid + ": \(String(format: "%.2f ETH", minimumBid))")
+                    Text(L10n.minimumBid + ": \(String(format: "%.2f TON", minimumBid))")
                         .font(NFTTypography.caption)
                         .foregroundStyle(.secondary)
 

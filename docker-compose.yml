@@ -74,7 +74,8 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: nftarts_minio
       MINIO_SECRET_KEY: minio_secret_key
-      MINIO_PUBLIC_URL: http://172.20.10.2:9000
+      MINIO_PUBLIC_URL: http://192.168.1.67:9000
+      MINTER_URL: http://minter:3001
     ports:
       - "8080:8080"
     depends_on:
@@ -82,6 +83,21 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+
+  # TON Minter — Node.js HTTP-сервис, шлёт mint-транзакции в коллекцию
+  # от имени owner-кошелька. Изолирован от Vapor.
+  minter:
+    build:
+      context: ./artsphere-contracts
+      dockerfile: Dockerfile.minter
+    container_name: nftarts-minter
+    environment:
+      OWNER_MNEMONIC: ${OWNER_MNEMONIC:-}
+      TONCENTER_API_KEY: ${TONCENTER_API_KEY:-}
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
 
   # pgAdmin (опционально — управление БД через веб-интерфейс)
   pgadmin:

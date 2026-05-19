@@ -1,0 +1,20 @@
+# Минимальный образ для minter-service.
+# Запускает Node.js HTTP-сервис, который шлёт mint-транзакции в коллекцию.
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Сначала зависимости — лучшее кэширование
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+# Сборка контрактов + scripts + сервис
+COPY tsconfig.json tact.config.json ./
+COPY contracts ./contracts
+COPY build ./build
+COPY scripts ./scripts
+COPY server ./server
+
+EXPOSE 3001
+
+CMD ["npx", "ts-node", "server/minter-service.ts"]

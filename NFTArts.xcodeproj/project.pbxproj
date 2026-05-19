@@ -30,6 +30,7 @@
 		473496D364DEC0A1C25C9B5B /* ShowroomLayoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C9D405DA664DC15EF08852 /* ShowroomLayoutStore.swift */; };
 		47A340A41A385D67F978B340 /* Color+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3565710316DB3CBBAFA9D6BA /* Color+Extensions.swift */; };
 		4A546891A04DA5A7A7CED23D /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A6629BE4C3A884A6677BA5 /* DashboardView.swift */; };
+		4B4D5CF25CD2D3AC3EDA1483 /* ShowroomTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D614DAE1A3EBCD77AD2C9B /* ShowroomTheme.swift */; };
 		4CE25AEF7398CD3A785A2327 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BB8D71427478428B251A2C /* FeedView.swift */; };
 		5920E4002ABEBC7850AF7D76 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808CCD70D83E0894E8E899CB /* Theme.swift */; };
 		5FB8B4C33E46930DB7136731 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13885D41823758CB4BAA4335 /* MessagesView.swift */; };
@@ -54,6 +55,7 @@
 		A2838B8F1722CC82F3461E7C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F7454098F1869095BA66DC81 /* Assets.xcassets */; };
 		A617E8DBF8CE0453BA3DBB7E /* ArtworksListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C88408DA039B1DF647AC67 /* ArtworksListView.swift */; };
 		A9FCF0346909E8355EFCD08C /* PushNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F7FC4A537EDFFCD8FFC9EC1 /* PushNotificationService.swift */; };
+		AD0A484DCB9BBEB5C2F885E8 /* ToncenterClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD84E61BEC318BDFFB77196 /* ToncenterClient.swift */; };
 		B135FDFA8D92BB25CF6A9365 /* UsersListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ACF94F589D9B19E2B3634F9 /* UsersListView.swift */; };
 		B155AD3D2D90E9DC19DF7915 /* NormalMapGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFD22BD2E7748DFF108B143 /* NormalMapGenerator.swift */; };
 		B161B6BDA1152C0C5516E3B1 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89966BF9F480458FBC83D40D /* NetworkService.swift */; };
@@ -102,6 +104,7 @@
 		36D496EB9DB585534A5589A4 /* ExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreView.swift; sourceTree = "<group>"; };
 		37D5512ADC9CDDC3D66FAD88 /* CreateNFTView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateNFTView.swift; sourceTree = "<group>"; };
 		39C8605E07C2E564452D1DED /* BidButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BidButton.swift; sourceTree = "<group>"; };
+		39D614DAE1A3EBCD77AD2C9B /* ShowroomTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShowroomTheme.swift; sourceTree = "<group>"; };
 		3E14F5739A0492E0672B09C1 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		432A66161FCCED14D07B9C5C /* DepthEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepthEstimator.swift; sourceTree = "<group>"; };
 		459BC452C8F2A71E1A9F7ACA /* AuctionService+MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AuctionService+MockData.swift"; sourceTree = "<group>"; };
@@ -146,6 +149,7 @@
 		D26947C0DDCD11B1F1E7B456 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D4C09C2F5DB538041C886E8D /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		D7925BB2F904A469BE8DAFD3 /* AuctionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuctionCardView.swift; sourceTree = "<group>"; };
+		DCD84E61BEC318BDFFB77196 /* ToncenterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToncenterClient.swift; sourceTree = "<group>"; };
 		E02F073A2E0C2EB6AB9151F5 /* View+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Extensions.swift"; sourceTree = "<group>"; };
 		E40C477B255CC582BF47C6B6 /* AdminAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminAuthManager.swift; sourceTree = "<group>"; };
 		E51A2E05C48B309F0EF06CF9 /* ArtworkImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkImageView.swift; sourceTree = "<group>"; };
@@ -327,6 +331,7 @@
 			children = (
 				47C9D405DA664DC15EF08852 /* ShowroomLayoutStore.swift */,
 				117A4ED33E189D7093BF73F9 /* ShowroomScene.swift */,
+				39D614DAE1A3EBCD77AD2C9B /* ShowroomTheme.swift */,
 				7EC54EBE2F40989696693A63 /* ShowroomView.swift */,
 			);
 			path = Showroom;
@@ -417,6 +422,7 @@
 				11B37E1886CB338A423F7CF9 /* MockDataService.swift */,
 				89966BF9F480458FBC83D40D /* NetworkService.swift */,
 				2F7FC4A537EDFFCD8FFC9EC1 /* PushNotificationService.swift */,
+				DCD84E61BEC318BDFFB77196 /* ToncenterClient.swift */,
 				F5F9F9D5C27455AFFD66857F /* TONConnectService.swift */,
 				AE3BE67BA53E04B2EEFEECCB /* WebSocketService.swift */,
 			);
@@ -647,11 +653,13 @@
 				A9FCF0346909E8355EFCD08C /* PushNotificationService.swift in Sources */,
 				473496D364DEC0A1C25C9B5B /* ShowroomLayoutStore.swift in Sources */,
 				075DD3F05005E1981B0C4BF6 /* ShowroomScene.swift in Sources */,
+				4B4D5CF25CD2D3AC3EDA1483 /* ShowroomTheme.swift in Sources */,
 				6CED81B7605536C4890CF03F /* ShowroomView.swift in Sources */,
 				E57CA855E15775F15ABAAEE3 /* SkeletonView.swift in Sources */,
 				FC1ED267EC175BEEEB118F94 /* TONConnectButton.swift in Sources */,
 				2B2383EA687DD559171E4A3F /* TONConnectService.swift in Sources */,
 				5920E4002ABEBC7850AF7D76 /* Theme.swift in Sources */,
+				AD0A484DCB9BBEB5C2F885E8 /* ToncenterClient.swift in Sources */,
 				31B73CFF0A78E1D1CE2F54A9 /* User.swift in Sources */,
 				11E1F8291B2564DA33E4512D /* UserProfileView.swift in Sources */,
 				02DABA61888CFB34A7348FEE /* View+Extensions.swift in Sources */,

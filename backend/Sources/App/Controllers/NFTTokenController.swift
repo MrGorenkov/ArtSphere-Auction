@@ -17,48 +17,83 @@ struct NFTTokenController: RouteCollection {
             throw Abort(.badRequest, reason: "Invalid artwork ID")
         }
 
-        // Проверяем, существует ли работа
-        guard let artwork = try await ArtworkModel.find(artworkId, on: req.db) else {
+        guard let _ = try await ArtworkModel.find(artworkId, on: req.db) else {
             throw Abort(.notFound, reason: "Artwork not found")
         }
 
-        // Проверяем, не сминтили ли её уже
         if let _ = try await NFTTokenModel.query(on: req.db)
             .filter(\.$artwork.$id == artworkId)
             .first() {
             throw Abort(.badRequest, reason: "NFT for this artwork already exists")
         }
 
-        // ВАЖНО: Ниже мы пока ставим плейсхолдер. 
-        // Когда ты задеплоишь реальную коллекцию на Шаге 2, сюда нужно будет вставить её адрес!
-        let collectionAddress = "EQCYoGV2OPqa3wgVF8Ac7lDs25Ifz9ImJylMHFIX7uS3hpiJ"
-        let generatedTokenId = String(Int.random(in: 1000...999999)) // Имитация ID токена в блокчейне
+        // Реальный mint в TON Testnet: HTTP-вызов в minter-сервис.
+        // Сервис подписывает MintNFT-сообщение mnemonic-ом owner-кошелька и шлёт
+        // его в задеплоенный контракт ArtSphereCollection. Контракт инкрементит
+        // next_item_index — это и есть on-chain tokenId, который мы сохраним.
+        let mintResult = try await callMinter(artworkId: artworkId.uuidString, client: req.client, logger: req.logger)
 
         let token = NFTTokenModel(
             artworkId: artworkId,
             ownerId: userId,
-            contractAddress: collectionAddress,
-            tokenIdOnChain: generatedTokenId,
+            contractAddress: mintResult.collection,
+            tokenIdOnChain: mintResult.tokenId,
             blockchain: "TON",
             status: "minted"
         )
-
         try await token.save(on: req.db)
 
-        // Генерируем фейковый URI для метаданных на базе MinIO
-        token.metadataUri = "\(APIConfig.baseURL)/metadata/\(generatedTokenId).json"
+        // metadataUri используется для ссылки в эксплорер — показывает все транзакции коллекции
+        token.metadataUri = "https://testnet.tonviewer.com/\(mintResult.collection)"
         try await token.save(on: req.db)
 
         return NFTTokenDTO(
             id: try token.requireID().uuidString,
             artworkId: artworkId.uuidString,
             ownerId: userId.uuidString,
-            contractAddress: collectionAddress,
-            tokenIdOnChain: generatedTokenId,
+            contractAddress: mintResult.collection,
+            tokenIdOnChain: mintResult.tokenId,
             blockchain: token.blockchain,
             status: token.status,
             mintedAt: ISO8601DateFormatter().string(from: token.mintedAt ?? Date()),
             metadataUri: token.metadataUri
         )
+    }
+
+    // MARK: - Minter client
+
+    private struct MinterRequest: Content {
+        let artworkId: String
+    }
+
+    private struct MinterResponse: Content {
+        let tokenId: String
+        let collection: String
+        let artworkId: String
+    }
+
+    private struct MinterError: Content {
+        let error: String
+    }
+
+    private func callMinter(artworkId: String, client: Client, logger: Logger) async throws -> MinterResponse {
+        let baseUrl = Environment.get("MINTER_URL") ?? "http://minter:3001"
+        let uri = URI(string: "\(baseUrl)/mint")
+
+        let response = try await client.post(uri) { req in
+            try req.content.encode(MinterRequest(artworkId: artworkId))
+        }
+
+        guard response.status == .ok else {
+            let message = (try? response.content.decode(MinterError.self).error) ?? "status \(response.status.code)"
+            logger.error("minter returned non-ok: \(message)")
+            throw Abort(.internalServerError, reason: "TON mint failed: \(message)")
+        }
+
+        do {
+            return try response.content.decode(MinterResponse.self)
+        } catch {
+            throw Abort(.internalServerError, reason: "TON mint: invalid response from minter")
+        }
     }
 }

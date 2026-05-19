@@ -34,7 +34,7 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
         createdAt: Date = Date(),
         tokenId: String? = nil,
         contractAddress: String? = nil,
-        blockchain: BlockchainNetwork = .ethereum,
+        blockchain: BlockchainNetwork = .ton,
         imageSource: ImageSource = .procedural,
         localImageData: Data? = nil,
         imageURL: String? = nil,
@@ -89,7 +89,17 @@ struct NFTArtwork: Identifiable, Hashable, Codable {
 
 
     enum BlockchainNetwork: String, CaseIterable, Codable {
+        case ton = "TON"
         case ethereum = "Ethereum"
         case polygon = "Polygon"
+
+        /// Тикер валюты, отображаемый рядом с суммами ставок.
+        var currencyCode: String {
+            switch self {
+            case .ton:      return "TON"
+            case .ethereum: return "ETH"
+            case .polygon:  return "MATIC"
+            }
+        }
     }
 }

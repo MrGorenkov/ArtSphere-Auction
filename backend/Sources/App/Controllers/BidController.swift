@@ -31,7 +31,7 @@ struct BidController: RouteCollection {
 
         let minimumBid = max(auction.currentBid + auction.bidStep, auction.startingPrice)
         guard body.amount >= minimumBid else {
-            throw Abort(.badRequest, reason: "Bid must be at least \(String(format: "%.2f", minimumBid)) ETH")
+            throw Abort(.badRequest, reason: "Bid must be at least \(String(format: "%.2f", minimumBid)) TON")
         }
 
         guard let user = try await UserModel.find(userId, on: req.db) else {
@@ -69,11 +69,14 @@ struct BidController: RouteCollection {
             await WebSocketManager.shared.sendToUser(prevBid.$user.id, message: outbidMsg)
         }
 
-        // ⚡️ Запуск Авто-Брокера асинхронно
-        // Передаем req.application.db чтобы контекст не умер вместе с завершением текущего реквеста
+        // ⚡️ Запуск Авто-Брокера через сериализатор:
+        // несколько параллельных ставок на один аукцион сольются в одну очередь,
+        // чтобы исключить race condition (дубликаты ставок от того же брокера).
         let appDb = req.application.db
         Task {
-            try? await self.processAutoBroker(auctionId: auctionId, db: appDb)
+            await AutoBrokerSerializer.shared.run(auctionId: auctionId) {
+                try? await Self.processAutoBroker(auctionId: auctionId, db: appDb)
+            }
         }
 
         return bidDTO
@@ -105,22 +108,28 @@ struct BidController: RouteCollection {
             try await newSetting.save(on: req.db)
         }
 
-        // Запуск проверки: может авто-брокер сразу должен сделать ставку
+        // Запуск проверки через сериализатор (см. placeBid)
         let appDb = req.application.db
         Task {
-            try? await self.processAutoBroker(auctionId: auctionId, db: appDb)
+            await AutoBrokerSerializer.shared.run(auctionId: auctionId) {
+                try? await Self.processAutoBroker(auctionId: auctionId, db: appDb)
+            }
         }
 
         return .ok
     }
 
-    // ⚡️ ЯДРО АВТО-БРОКЕРА
-    private func processAutoBroker(auctionId: UUID, db: Database) async throws {
-        var isAutoBidding = true
+    // ⚡️ ЯДРО АВТО-БРОКЕРА.
+    // static — чтобы вызываться из @Sendable closure (см. AutoBrokerSerializer).
+    static func processAutoBroker(auctionId: UUID, db: Database) async throws {
+        var safetyCounter = 0
+        let maxLadderSteps = 50 // защита от бесконечного цикла на случай неожиданных условий
 
-        while isAutoBidding {
-            // Перезапрашиваем аукцион каждый раз, так как SQL-триггер (on_bid_insert) обновляет current_bid
+        while safetyCounter < maxLadderSteps {
+            safetyCounter += 1
+
             guard let auction = try await AuctionModel.find(auctionId, on: db) else { return }
+            guard auction.status == "active", auction.endTime > Date() else { return }
 
             let previousHighBidder = try await BidModel.query(on: db)
                 .filter(\.$auction.$id == auctionId)
@@ -131,36 +140,33 @@ struct BidController: RouteCollection {
             let currentHighBidderId = previousHighBidder?.$user.id
             let nextBidAmount = max(auction.currentBid + auction.bidStep, auction.startingPrice)
 
-            // Ищем подходящие настройки брокеров
             let candidateBrokers = try await AutoBrokerSettingModel.query(on: db)
                 .filter(\.$auction.$id == auctionId)
                 .filter(\.$maxAmount >= nextBidAmount)
                 .with(\.$user)
                 .all()
 
-            // Исключаем лидера и тех, кому не хватает реального баланса
             let validBrokers = candidateBrokers.filter {
                 $0.$user.id != currentHighBidderId && $0.user.balance >= nextBidAmount
             }
 
-            if validBrokers.isEmpty {
-                isAutoBidding = false
-                break
-            }
-
-            // Выбираем самого заряженного брокера (если равны - выигрывает тот, кто создал настройку раньше)
             guard let winnerBroker = validBrokers.sorted(by: {
                 if $0.maxAmount == $1.maxAmount {
                     return ($0.createdAt ?? Date()) < ($1.createdAt ?? Date())
                 }
                 return $0.maxAmount > $1.maxAmount
             }).first else {
-                isAutoBidding = false
-                break
+                return
             }
 
             let newBid = BidModel(auctionId: auctionId, userId: winnerBroker.$user.id, amount: nextBidAmount)
             try await newBid.save(on: db)
+
+            // Считаем актуальное количество ставок свежим запросом —
+            // на лесенке из нескольких авто-ставок нельзя полагаться на закэшированный auction.bidCount.
+            let freshBidCount = try await BidModel.query(on: db)
+                .filter(\.$auction.$id == auctionId)
+                .count()
 
             let bidDTO = newBid.toDTO(userName: winnerBroker.user.displayName)
             let wsMessage = WSBidMessage(
@@ -168,7 +174,7 @@ struct BidController: RouteCollection {
                 auctionId: auctionId.uuidString,
                 bid: bidDTO,
                 currentBid: nextBidAmount,
-                bidCount: auction.bidCount + 1
+                bidCount: Int(freshBidCount)
             )
             await WebSocketManager.shared.broadcastBid(wsMessage, auctionId: auctionId)
 
@@ -178,8 +184,6 @@ struct BidController: RouteCollection {
                 """
                 await WebSocketManager.shared.sendToUser(prevBid.$user.id, message: outbidMsg)
             }
-            
-            // Если сработало, while запустит следующий проход (брокеры будут перебивать друг друга лесенкой до исчерпания maxAmount)
         }
     }
 

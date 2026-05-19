@@ -1,0 +1,250 @@
+// automatically generated from `@stdlib/std/stdlib.fc` `/Users/alex_gorenkov/artsphere-contracts/build/ArtSphereCollection/ArtSphereCollection_ArtSphereCollection.fc` 
+PROGRAM{
+  DECLPROC __tact_context_get
+  DECLPROC __tact_context_get_sender
+  DECLPROC $DeployOk$_store
+  DECLPROC $DeployOk$_store_cell
+  DECLPROC $ArtSphereCollection$_store
+  DECLPROC $ArtSphereCollection$_load
+  DECLPROC $Context$_get_value
+  DECLPROC $ArtSphereCollection$init$_load
+  DECLPROC $ArtSphereCollection$_contract_init
+  DECLPROC $ArtSphereCollection$_contract_load
+  DECLPROC $ArtSphereCollection$_contract_store
+  DECLPROC $ArtSphereCollection$_fun_get_collection_data
+  DECLPROC $MessageParameters$_constructor_bounce_to_value_mode_body
+  DECLPROC $ArtSphereCollection$_fun_notify
+  DECLPROC $DeployOk$_constructor_queryId
+  102491 DECLMETHOD %get_collection_data
+  DECLPROC recv_internal
+  65535 DECLMETHOD __tact_selector_hack
+  DECLGLOBVAR __tact_context
+  DECLGLOBVAR __tact_context_sender
+  DECLGLOBVAR __tact_child_contract_codes
+  DECLGLOBVAR __tact_randomized
+  __tact_context_get PROCINLINE:<{
+    __tact_context GETGLOB
+    4 UNTUPLE
+  }>
+  __tact_context_get_sender PROCINLINE:<{
+    __tact_context_sender GETGLOB
+  }>
+  $DeployOk$_store PROCINLINE:<{
+    2952335191 PUSHINT
+    ROT
+    32 STU
+    64 STU
+  }>
+  $DeployOk$_store_cell PROCINLINE:<{
+    SWAP
+    $DeployOk$_store INLINECALLDICT
+    ENDC
+  }>
+  $ArtSphereCollection$_store PROCINLINE:<{
+    s0 s2 XCHG
+    STSLICE
+    32 STU
+  }>
+  $ArtSphereCollection$_load PROCINLINE:<{
+    LDMSGADDR
+    32 LDU
+    -ROT
+  }>
+  $Context$_get_value PROCINLINE:<{
+    s1 s3 XCHG
+    3 BLKDROP
+  }>
+  $ArtSphereCollection$init$_load PROCINLINE:<{
+    LDMSGADDR
+    SWAP
+  }>
+  $ArtSphereCollection$_contract_init PROCINLINE:<{
+    0 PUSHINT
+  }>
+  $ArtSphereCollection$_contract_load PROCINLINE:<{
+    c4 PUSH
+    CTOS
+    1 LDI
+    SWAP
+    IF:<{
+      $ArtSphereCollection$_load INLINECALLDICT
+      1 2 BLKDROP2
+    }>ELSE<{
+      $ArtSphereCollection$init$_load INLINECALLDICT
+      SWAP
+      ENDS
+      $ArtSphereCollection$_contract_init INLINECALLDICT
+    }>
+  }>
+  $ArtSphereCollection$_contract_store PROCINLINE:<{
+    NEWC
+    TRUE
+    SWAP
+    1 STI
+    -ROT
+    $ArtSphereCollection$_store INLINECALLDICT
+    ENDC
+    c4 POP
+  }>
+  $ArtSphereCollection$_fun_get_collection_data PROCREF:<{
+    DUP
+  }>
+  $MessageParameters$_constructor_bounce_to_value_mode_body PROCINLINE:<{
+    s3 s3 XCHG2
+    s0 s4 XCHG
+  }>
+  $ArtSphereCollection$_fun_notify PROCINLINE:<{
+    __tact_context_get_sender INLINECALLDICT
+    FALSE
+    0 PUSHINT
+    s0 s3 XCHG2
+    66 PUSHINT
+    SWAP
+    $MessageParameters$_constructor_bounce_to_value_mode_body INLINECALLDICT
+        NEWC
+        b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+        1 STI               // store `bounce`
+        b{000} STSLICECONST // store bounced = false and src = addr_none
+        STSLICE             // store `to`
+        SWAP
+        STGRAMS             // store `value`
+        106 PUSHINT         // 1 + 4 + 4 + 64 + 32 + 1
+        STZEROES
+        // → Stack state
+        // s0: Builder
+        // s1: `body`
+        // s2: `mode`
+        STDICT
+        ENDC
+        SWAP
+        SENDRAWMSG
+  }>
+  $DeployOk$_constructor_queryId PROCINLINE:<{
+  }>
+  %get_collection_data PROC:<{
+    $ArtSphereCollection$_contract_load INLINECALLDICT
+    $ArtSphereCollection$_fun_get_collection_data INLINECALLDICT
+    2 1 BLKDROP2
+  }>
+  recv_internal PROC:<{
+    SWAP
+    CTOS
+    2 PUSHINT
+    SDSKIPFIRST
+    1 LDI
+    1 LDI
+    LDMSGADDR
+    OVER
+    s3 s4 XCHG
+    s6 s6 XCHG2
+    4 TUPLE
+    __tact_context SETGLOB
+    s0 s2 XCHG
+    __tact_context_sender SETGLOB
+    $ArtSphereCollection$_contract_load INLINECALLDICT
+    s0 s3 XCHG
+    IFJMP:<{
+      3 BLKDROP
+    }>
+    SWAP
+    32 LDUQ 130 THROWIFNOT
+    OVER
+    542318487 PUSHINT
+    EQUAL
+    IFJMP:<{
+      2DROP
+      57579 PUSHINT
+      __tact_context_get_sender INLINECALLDICT
+      s2 PUSH
+      SDEQ
+      THROWANYIFNOT
+      SWAP
+      INC
+      $ArtSphereCollection$_contract_store INLINECALLDICT
+    }>
+    SWAP
+    2490013878 PUSHINT
+    EQUAL
+    IFJMP:<{
+      64 LDU
+      DROP
+      $DeployOk$_constructor_queryId INLINECALLDICT
+      NEWC
+      $DeployOk$_store_cell INLINECALLDICT
+      s1 s2 XCHG
+      $ArtSphereCollection$_fun_notify INLINECALLDICT
+      $ArtSphereCollection$_contract_store INLINECALLDICT
+    }>
+    3 BLKDROP
+    130 THROW
+  }>
+  __tact_selector_hack PROC:<{
+    @atend @ 1 {
+            execute current@ context@ current!
+            {
+                // The core idea of this function is to save gas by avoiding unnecessary dict jump, when recv_internal/recv_external is called
+                // We want to extract recv_internal/recv_external from the dict and select needed function
+                // not by jumping to the needed function by it's index, but by using usual IF statements.
+                }END> b> // Close previous builder, now we have a cell of previous code on top of the stack
+                <{ // Start of the new code builder
+                    SETCP0
+                    // Swap the new code builder with the previous code, now we have previous code on top of the stack
+                    swap
+                    // Transform cell to slice and load first ref from the previous code, now we have the dict on top of the stack
+                    <s ref@
+                    // Extract the recv_internal from the dict
+                    dup 0 swap @procdictkeylen idict@ { "internal shortcut error" abort } ifnot
+                    swap
+                    // Delete the recv_internal from the dict
+                    0 swap @procdictkeylen idict- drop
+                    // Delete the recv_external from the dict (it's okay if it's not there)
+                    -1 swap @procdictkeylen idict- drop
+                    // Delete the __tact_selector_hack from the dict
+                    65535 swap @procdictkeylen idict- drop
+                    // Bring the code builder from the bottom of the stack
+                    // because if recv_external extraction is optional, and the number of elements on the stack is not fixed
+                    depth 1- roll
+                    // Swap with the dict from which we extracted recv_internal and (maybe) recv_external
+                    swap
+                    // Check if the dict is empty
+                    dup null?
+                    // Store a copy of this flag in the bottom of the stack
+                    dup depth 1- -roll
+                    {
+                        // If the dict is empty, just drop it (it will be null if it's empty)
+                        drop
+                    }
+                    {
+                        // If the dict is not empty, prepare continuation to be stored in c3
+                        <{
+                            // Save this dict as first ref in this continuation, it will be pushed in runtime by DICTPUSHCONST
+                            swap @procdictkeylen DICTPUSHCONST
+                            // Jump to the needed function by it's index
+                            DICTIGETJMPZ
+                            // If such key is not found, throw 11 along with the key as an argument
+                            11 THROWARG
+                        }> PUSHCONT
+                        // Store the continuation in c3
+                        c3 POP
+                    } cond
+                    // Function id is on top of the (runtime) stack
+                    DUP IFNOTJMP:<{
+                        // place recv_internal here
+                        DROP swap @addop
+                    }>
+                    // Bring back the flag, indicating if the dict is empty or not from the bottom of the stack
+                    depth 1- roll
+                    {
+                        // If the dict is empty, throw 11
+                        11 THROWARG
+                    }
+                    {
+                        // If the dict is not empty, jump to continuation from c3
+                        c3 PUSH JMPX
+                    } cond
+                }> b>
+            } : }END>c
+            current@ context! current!
+        } does @atend !
+  }>
+}END>c

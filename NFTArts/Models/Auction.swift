@@ -37,7 +37,7 @@ struct Auction: Identifiable, Hashable {
     }
 
     var formattedCurrentBid: String {
-        String(format: "%.2f ETH", currentBid)
+        String(format: "%.2f TON", currentBid)
     }
 
     /// Smallest bid the server will accept.
@@ -66,7 +66,7 @@ struct Auction: Identifiable, Hashable {
 
     var formattedBuyNowPrice: String? {
         guard let price = buyNowPrice else { return nil }
-        return String(format: "%.2f ETH", price)
+        return String(format: "%.2f TON", price)
     }
 
     enum AuctionStatus: String, Codable {
@@ -85,7 +85,7 @@ struct Bid: Identifiable, Hashable {
     let timestamp: Date
 
     var formattedAmount: String {
-        String(format: "%.2f ETH", amount)
+        String(format: "%.2f TON", amount)
     }
 
     var formattedTimestamp: String {

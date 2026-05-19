@@ -9,7 +9,7 @@ enum APIConfig {
         return "http://localhost:8080/api/v1"
         #else
         // Physical device on the same Wi-Fi as the host running docker compose.
-        return "http://172.20.10.2:8080/api/v1"
+        return "http://192.168.1.67:8080/api/v1"
         #endif
     }
 

@@ -53,7 +53,7 @@ struct DashboardView: View {
 
                         StatCard(
                             title: "Оборот",
-                            value: String(format: "%.2f ETH", stats.totalRevenue),
+                            value: String(format: "%.2f TON", stats.totalRevenue),
                             subtitle: "Всего ставок: \(stats.totalBids)",
                             icon: "chart.line.uptrend.xyaxis",
                             color: .orange

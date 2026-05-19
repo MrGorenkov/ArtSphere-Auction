@@ -47,6 +47,6 @@ struct User: Identifiable, Hashable {
     }
 
     var formattedBalance: String {
-        String(format: "%.4f ETH", balance)
+        String(format: "%.4f TON", balance)
     }
 }

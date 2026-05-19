@@ -23,16 +23,21 @@ enum ShowroomSceneBuilder {
     /// Builds a scene populated with up to 12 artworks. Empty walls are still rendered.
     /// Each painting is initially flat (diffuse only) so the room appears instantly;
     /// normal & height maps are computed lazily on a background queue and applied when ready.
-    static func build(artworks: [NFTArtwork]) -> SCNScene {
+    static func build(artworks: [NFTArtwork], theme: ShowroomTheme = .louvre) -> SCNScene {
         let scene = SCNScene()
-        scene.background.contents = UIColor(red: 0.10, green: 0.08, blue: 0.06, alpha: 1.0)
+        let palette = theme.palette
+        scene.background.contents = palette.background
 
-        addFloor(to: scene)
-        addCeiling(to: scene)
-        addWalls(to: scene)
-        addPaintings(to: scene, artworks: Array(artworks.prefix(12)))
-        addLighting(to: scene)
-        addDecor(to: scene)
+        addFloor(to: scene, palette: palette)
+        addCeiling(to: scene, palette: palette)
+        addWalls(to: scene, palette: palette)
+        addPaintings(to: scene, artworks: Array(artworks.prefix(12)), palette: palette)
+        addLighting(to: scene, palette: palette)
+        if palette.showLouvreDecor {
+            addDecor(to: scene, palette: palette)
+        } else {
+            addRug(to: scene, palette: palette)
+        }
         addCamera(to: scene)
 
         return scene
@@ -40,51 +45,48 @@ enum ShowroomSceneBuilder {
 
     // MARK: - Floor & ceiling
 
-    private static func addFloor(to scene: SCNScene) {
-        // Wooden parquet plane — matte (no SCNFloor reflection per design feedback).
+    private static func addFloor(to scene: SCNScene, palette: ShowroomTheme.Palette) {
         let plane = SCNPlane(width: CGFloat(roomSize), height: CGFloat(roomSize))
         let mat = SCNMaterial()
-        mat.diffuse.contents = UIColor(red: 0.32, green: 0.22, blue: 0.14, alpha: 1.0) // warm walnut
-        mat.diffuse.contentsTransform = SCNMatrix4MakeScale(6, 6, 1) // tile the implied parquet
+        mat.diffuse.contents = palette.floorColor
+        mat.diffuse.contentsTransform = SCNMatrix4MakeScale(6, 6, 1)
         mat.diffuse.wrapS = .repeat
         mat.diffuse.wrapT = .repeat
-        mat.roughness.contents = 0.85
+        mat.roughness.contents = palette.floorRoughness
         mat.metalness.contents = 0.0
         mat.lightingModel = .physicallyBased
         plane.materials = [mat]
 
         let node = SCNNode(geometry: plane)
-        node.eulerAngles.x = -.pi / 2 // face up
+        node.eulerAngles.x = -.pi / 2
         scene.rootNode.addChildNode(node)
     }
 
-    private static func addCeiling(to scene: SCNScene) {
+    private static func addCeiling(to scene: SCNScene, palette: ShowroomTheme.Palette) {
         let plane = SCNPlane(width: CGFloat(roomSize), height: CGFloat(roomSize))
         let mat = SCNMaterial()
-        mat.diffuse.contents = UIColor(red: 0.94, green: 0.92, blue: 0.86, alpha: 1.0) // ivory
+        mat.diffuse.contents = palette.ceilingColor
         mat.lightingModel = .lambert
         mat.isDoubleSided = true
         plane.materials = [mat]
 
         let node = SCNNode(geometry: plane)
         node.position = SCNVector3(0, roomHeight, 0)
-        node.eulerAngles.x = .pi / 2 // face down
+        node.eulerAngles.x = .pi / 2
         scene.rootNode.addChildNode(node)
     }
 
     // MARK: - Walls
 
-    private static func addWalls(to scene: SCNScene) {
-        // Warm gallery beige (Louvre-like sandstone tone).
+    private static func addWalls(to scene: SCNScene, palette: ShowroomTheme.Palette) {
         let wallMat = SCNMaterial()
-        wallMat.diffuse.contents = UIColor(red: 0.78, green: 0.71, blue: 0.60, alpha: 1.0)
-        wallMat.roughness.contents = 0.95
+        wallMat.diffuse.contents = palette.wallColor
+        wallMat.roughness.contents = palette.wallRoughness
         wallMat.metalness.contents = 0.0
         wallMat.lightingModel = .physicallyBased
 
-        // Dark wooden baseboard / chair-rail trim material.
         let trimMat = SCNMaterial()
-        trimMat.diffuse.contents = UIColor(red: 0.20, green: 0.13, blue: 0.08, alpha: 1.0)
+        trimMat.diffuse.contents = palette.trimColor
         trimMat.roughness.contents = 0.6
         trimMat.metalness.contents = 0.0
         trimMat.lightingModel = .physicallyBased
@@ -129,10 +131,9 @@ enum ShowroomSceneBuilder {
     // MARK: - Paintings
 
     /// Distributes `artworks` evenly across the four walls (≤3 per wall).
-    private static func addPaintings(to scene: SCNScene, artworks: [NFTArtwork]) {
+    private static func addPaintings(to scene: SCNScene, artworks: [NFTArtwork], palette: ShowroomTheme.Palette) {
         guard !artworks.isEmpty else { return }
 
-        // Distribute artworks across 4 walls.
         let walls = WallDirection.allCases
         var perWall: [WallDirection: [NFTArtwork]] = [:]
         for (i, art) in artworks.enumerated() {
@@ -141,11 +142,11 @@ enum ShowroomSceneBuilder {
         }
 
         for (direction, items) in perWall {
-            place(artworks: items, on: direction, in: scene)
+            place(artworks: items, on: direction, in: scene, palette: palette)
         }
     }
 
-    private static func place(artworks: [NFTArtwork], on wall: WallDirection, in scene: SCNScene) {
+    private static func place(artworks: [NFTArtwork], on wall: WallDirection, in scene: SCNScene, palette: ShowroomTheme.Palette) {
         // Centre the row of paintings on the wall, with equal spacing.
         let count = artworks.count
         let totalSpan = Float(roomSize) * 0.75 // leave 12.5% margin on each side
@@ -169,29 +170,27 @@ enum ShowroomSceneBuilder {
                 alongWall: alongWall,
                 wallThickness: wallThickness
             )
-            let paintingNode = makePaintingNode(for: artwork)
+            let paintingNode = makePaintingNode(for: artwork, palette: palette)
             paintingNode.position = position
             paintingNode.eulerAngles.y = wall.paintingRotationY
             scene.rootNode.addChildNode(paintingNode)
 
-            // Picture light: small warm spot mounted just above the frame, aimed at canvas centre.
-            addPictureLight(at: position, wall: wall, in: scene)
+            addPictureLight(at: position, wall: wall, in: scene, palette: palette)
         }
     }
 
     /// Museum-style "picture lamp": mounted above the frame, angled 30° down at the canvas.
     /// Wide enough cone (45°) to cover the whole 1.6 m painting evenly, no hard edge fall-off.
     /// Adds a small brass arm + lamp head as visible geometry above the frame.
-    private static func addPictureLight(at paintingPos: SCNVector3, wall: WallDirection, in scene: SCNScene) {
+    private static func addPictureLight(at paintingPos: SCNVector3, wall: WallDirection, in scene: SCNScene, palette: ShowroomTheme.Palette) {
         let lightNode = SCNNode()
         lightNode.name = "showroom_picture_light"
         let light = SCNLight()
         light.type = .spot
-        // Whisper-soft accent — almost imperceptible warm glow on the canvas top.
-        light.intensity = 25
+        light.intensity = palette.pictureIntensity
         light.spotInnerAngle = 50
         light.spotOuterAngle = 90
-        light.color = UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0) // warm halogen
+        light.color = palette.pictureColor
         light.attenuationStartDistance = 0.5
         light.attenuationEndDistance = 3.5
         light.castsShadow = false // soft fill, shadowless to keep painting evenly lit
@@ -249,7 +248,7 @@ enum ShowroomSceneBuilder {
         scene.rootNode.addChildNode(armNode)
     }
 
-    private static func makePaintingNode(for artwork: NFTArtwork) -> SCNNode {
+    private static func makePaintingNode(for artwork: NFTArtwork, palette: ShowroomTheme.Palette) -> SCNNode {
         let group = SCNNode()
         group.name = "painting_\(artwork.id.uuidString)"
 
@@ -273,8 +272,7 @@ enum ShowroomSceneBuilder {
         canvasNode.position = SCNVector3(0, 0, 0.01)
         group.addChildNode(canvasNode)
 
-        // Frame (4 bars in dark metal).
-        addFrame(around: paintingSize, to: group)
+        addFrame(around: paintingSize, to: group, palette: palette)
 
         // Enrich with normal/height maps in the background. Apply on the main thread
         // so SceneKit doesn't see partial writes mid-frame.
@@ -296,15 +294,14 @@ enum ShowroomSceneBuilder {
         return group
     }
 
-    private static func addFrame(around innerSize: CGFloat, to parent: SCNNode) {
+    private static func addFrame(around innerSize: CGFloat, to parent: SCNNode, palette: ShowroomTheme.Palette) {
         let thickness: CGFloat = 0.07
         let depth: CGFloat = 0.06
 
-        // Burnished gold-leaf frame, classic gallery look.
         let mat = SCNMaterial()
-        mat.diffuse.contents = UIColor(red: 0.62, green: 0.48, blue: 0.18, alpha: 1.0)
-        mat.roughness.contents = 0.35
-        mat.metalness.contents = 0.75
+        mat.diffuse.contents = palette.frameDiffuse
+        mat.roughness.contents = palette.frameRoughness
+        mat.metalness.contents = palette.frameMetalness
         mat.lightingModel = .physicallyBased
 
         let configs: [(CGFloat, CGFloat, SCNVector3)] = [
@@ -324,104 +321,45 @@ enum ShowroomSceneBuilder {
 
     // MARK: - Lighting
 
-    private static func addLighting(to scene: SCNScene) {
-        // Warm ambient — diffuse base light bouncing off cream walls.
+    private static func addLighting(to scene: SCNScene, palette: ShowroomTheme.Palette) {
         let ambient = SCNNode()
         ambient.name = "showroom_ambient"
         ambient.light = SCNLight()
         ambient.light?.type = .ambient
-        ambient.light?.intensity = 320
-        ambient.light?.color = UIColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1.0)
+        ambient.light?.intensity = palette.ambientIntensity
+        ambient.light?.color = palette.ambientColor
         scene.rootNode.addChildNode(ambient)
 
-        // Soft top-down area light from the ceiling — broad fill, no harsh hot spots.
         let fill = SCNNode()
         fill.name = "showroom_fill"
         fill.light = SCNLight()
         fill.light?.type = .area
-        fill.light?.intensity = 350
+        fill.light?.intensity = palette.fillIntensity
         fill.light?.areaType = .rectangle
         fill.light?.areaExtents = simd_float3(Float(roomSize) * 0.7, Float(roomSize) * 0.7, 0)
-        fill.light?.color = UIColor(red: 1.0, green: 0.97, blue: 0.92, alpha: 1.0)
+        fill.light?.color = palette.ambientColor
         fill.position = SCNVector3(0, roomHeight - 0.05, 0)
-        fill.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0) // shine downward
+        fill.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
         scene.rootNode.addChildNode(fill)
 
-        // Faint omnidirectional centre lamp — gives the floor / room mid-tones some life.
         let centre = SCNNode()
         centre.name = "showroom_centre"
         centre.light = SCNLight()
         centre.light?.type = .omni
-        centre.light?.intensity = 180
-        centre.light?.color = UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0)
+        centre.light?.intensity = palette.fillIntensity * 0.5
+        centre.light?.color = palette.pictureColor
         centre.light?.attenuationStartDistance = 1.5
         centre.light?.attenuationEndDistance = 8
         centre.position = SCNVector3(0, roomHeight * 0.6, 0)
         scene.rootNode.addChildNode(centre)
     }
 
-    // MARK: - Theme switching
-
-    /// Mutates an existing scene in place to apply a lighting theme. Called when the user
-    /// toggles the day/night/gallery button at runtime.
-    static func applyLighting(_ mode: ShowroomView.LightingMode, to scene: SCNScene) {
-        let bgColor: UIColor
-        let ambientIntensity: CGFloat
-        let ambientColor: UIColor
-        let fillIntensity: CGFloat
-        let pictureIntensity: CGFloat
-        let pictureColor: UIColor
-
-        switch mode {
-        case .gallery:
-            bgColor = UIColor(red: 0.10, green: 0.08, blue: 0.06, alpha: 1.0)
-            ambientIntensity = 320
-            ambientColor = UIColor(red: 1.0, green: 0.96, blue: 0.88, alpha: 1.0)
-            fillIntensity = 350
-            pictureIntensity = 25
-            pictureColor = UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0)
-        case .day:
-            bgColor = UIColor(red: 0.78, green: 0.86, blue: 0.95, alpha: 1.0)
-            ambientIntensity = 700
-            ambientColor = UIColor(white: 1.0, alpha: 1.0)
-            fillIntensity = 600
-            pictureIntensity = 10
-            pictureColor = UIColor(red: 1.0, green: 0.99, blue: 0.96, alpha: 1.0)
-        case .night:
-            bgColor = UIColor(red: 0.02, green: 0.03, blue: 0.06, alpha: 1.0)
-            ambientIntensity = 90
-            ambientColor = UIColor(red: 0.5, green: 0.55, blue: 0.7, alpha: 1.0)
-            fillIntensity = 80
-            pictureIntensity = 60
-            pictureColor = UIColor(red: 1.0, green: 0.88, blue: 0.65, alpha: 1.0)
-        }
-
-        SCNTransaction.begin()
-        SCNTransaction.animationDuration = 0.4
-        scene.background.contents = bgColor
-        scene.rootNode.enumerateChildNodes { node, _ in
-            guard let name = node.name else { return }
-            switch name {
-            case "showroom_ambient":
-                node.light?.intensity = ambientIntensity
-                node.light?.color = ambientColor
-            case "showroom_fill", "showroom_centre":
-                node.light?.intensity = fillIntensity
-            case "showroom_picture_light":
-                node.light?.intensity = pictureIntensity
-                node.light?.color = pictureColor
-            default: break
-            }
-        }
-        SCNTransaction.commit()
-    }
-
     // MARK: - Decor
 
     /// Adds gallery furnishings: a central runner rug, two viewing benches, four corner
     /// pedestals with marble vases, and a multi-bulb chandelier hanging from the ceiling.
-    private static func addDecor(to scene: SCNScene) {
-        addRug(to: scene)
+    private static func addDecor(to scene: SCNScene, palette: ShowroomTheme.Palette) {
+        addRug(to: scene, palette: palette)
         addBench(to: scene, position: SCNVector3(-1.6, 0.0, 0))
         addBench(to: scene, position: SCNVector3( 1.6, 0.0, 0))
         addPedestal(to: scene, position: SCNVector3(-4.6, 0.0, -4.6))
@@ -431,10 +369,10 @@ enum ShowroomSceneBuilder {
         addChandelier(to: scene)
     }
 
-    private static func addRug(to scene: SCNScene) {
+    private static func addRug(to scene: SCNScene, palette: ShowroomTheme.Palette) {
         let rug = SCNPlane(width: 4.0, height: 8.0)
         let mat = SCNMaterial()
-        mat.diffuse.contents = UIColor(red: 0.55, green: 0.18, blue: 0.18, alpha: 1.0) // burgundy
+        mat.diffuse.contents = palette.rugColor
         mat.roughness.contents = 0.95
         mat.metalness.contents = 0.0
         mat.lightingModel = .lambert
@@ -442,7 +380,7 @@ enum ShowroomSceneBuilder {
 
         let node = SCNNode(geometry: rug)
         node.eulerAngles.x = -.pi / 2
-        node.position = SCNVector3(0, 0.005, 0) // sit on the floor
+        node.position = SCNVector3(0, 0.005, 0)
         scene.rootNode.addChildNode(node)
     }
 

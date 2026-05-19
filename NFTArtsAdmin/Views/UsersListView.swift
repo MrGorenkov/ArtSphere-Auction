@@ -156,7 +156,7 @@ struct UserRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(String(format: "%.2f ETH", user.balance))
+                Text(String(format: "%.2f TON", user.balance))
                     .font(.caption)
                     .fontWeight(.medium)
 

@@ -118,6 +118,8 @@ struct ChatView: View {
     @State private var messageText = ""
     @State private var isLoading = false
 
+    private var partnerUUID: UUID? { UUID(uuidString: userId) }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -143,6 +145,19 @@ struct ChatView: View {
             Divider()
 
             HStack(spacing: 12) {
+                // Кнопка "прикрепить" — пока умеет одно: прислать ссылку на свой шоурум
+                Menu {
+                    Button {
+                        shareMyShowroom()
+                    } label: {
+                        Label(L10n.shareMyShowroom, systemImage: "cube.transparent")
+                    }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.nftPurple)
+                }
+
                 TextField(L10n.typeMessage, text: $messageText)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12)
@@ -164,7 +179,34 @@ struct ChatView: View {
         }
         .navigationTitle(userName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if let partnerUUID {
+                    NavigationLink {
+                        UserProfileView(userId: partnerUUID, userName: userName, avatarUrl: avatarUrl)
+                            .environmentObject(auctionService)
+                    } label: {
+                        AvatarView(avatarUrl: avatarUrl, displayName: userName, size: 32)
+                    }
+                }
+            }
+        }
         .task { await loadMessages() }
+    }
+
+    /// Пакует ссылку на свой шоурум в текст сообщения. ChatBubble на стороне получателя
+    /// распознаёт префикс `[showroom:<UUID>]` и рендерит карточку с кнопкой открытия.
+    private func shareMyShowroom() {
+        let myId = auctionService.currentUser.id.uuidString
+        let payload = "[showroom:\(myId)] \(L10n.shareMyShowroomText)"
+        Task {
+            do {
+                let sent = try await NetworkService.shared.sendMessage(
+                    request: APISendMessageRequest(receiverId: userId, artworkId: nil, text: payload)
+                )
+                await MainActor.run { messages.append(sent) }
+            } catch {}
+        }
     }
 
     private func loadMessages() async {
@@ -196,6 +238,28 @@ struct ChatView: View {
 struct MessageBubble: View {
     let message: APIMessage
     let isMe: Bool
+    @EnvironmentObject var auctionService: AuctionService
+
+    /// Распарсенная ссылка на шоурум: префикс `[showroom:<UUID>]` в тексте.
+    private var sharedShowroomUserId: UUID? {
+        let pattern = #"\[showroom:([0-9A-Fa-f-]{36})\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: message.text, range: NSRange(message.text.startIndex..., in: message.text)),
+              let range = Range(match.range(at: 1), in: message.text) else {
+            return nil
+        }
+        return UUID(uuidString: String(message.text[range]))
+    }
+
+    /// Текст сообщения без markup-префикса.
+    private var displayText: String {
+        guard sharedShowroomUserId != nil else { return message.text }
+        return message.text.replacingOccurrences(
+            of: #"\[showroom:[0-9A-Fa-f-]{36}\]\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+    }
 
     var body: some View {
         HStack {
@@ -210,8 +274,14 @@ struct MessageBubble: View {
                     )
                 }
 
-                if !message.text.isEmpty {
-                    Text(message.text)
+                // Карточка-ссылка на шоурум (если сообщение содержит [showroom:UUID])
+                if let showroomUserId = sharedShowroomUserId {
+                    ShowroomLinkCard(userId: showroomUserId, isMe: isMe)
+                        .environmentObject(auctionService)
+                }
+
+                if !displayText.isEmpty {
+                    Text(displayText)
                         .font(NFTTypography.body)
                         .foregroundStyle(isMe ? .white : .primary)
                 }
@@ -229,6 +299,66 @@ struct MessageBubble: View {
 
             if !isMe { Spacer(minLength: 60) }
         }
+    }
+}
+
+// MARK: - Showroom Link Card
+
+/// Карточка-ссылка на чужой шоурум внутри сообщения.
+/// Tap открывает ShowroomView с работами указанного юзера.
+struct ShowroomLinkCard: View {
+    let userId: UUID
+    let isMe: Bool
+    @EnvironmentObject var auctionService: AuctionService
+
+    private var artworks: [NFTArtwork] {
+        auctionService.auctions.filter { $0.creatorId == userId }.map { $0.artwork }
+    }
+    private var userName: String {
+        auctionService.auctions.first(where: { $0.creatorId == userId })?.artwork.artistName ?? L10n.showroom
+    }
+
+    var body: some View {
+        NavigationLink {
+            ShowroomView(
+                artworks: artworks,
+                collectionName: userName,
+                collectionId: nil
+            )
+            .environmentObject(auctionService)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "cube.transparent")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(isMe ? .white : .nftPurple)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        (isMe ? Color.white.opacity(0.15) : Color.nftPurple.opacity(0.12)),
+                        in: RoundedRectangle(cornerRadius: 10)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.showroom)
+                        .font(NFTTypography.caption)
+                        .foregroundStyle(isMe ? .white.opacity(0.7) : .secondary)
+                    Text(userName)
+                        .font(NFTTypography.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(isMe ? .white : .primary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(isMe ? .white.opacity(0.6) : .secondary)
+            }
+            .padding(8)
+            .frame(maxWidth: 240, alignment: .leading)
+            .background(
+                isMe ? Color.white.opacity(0.1) : Color(.systemBackground),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

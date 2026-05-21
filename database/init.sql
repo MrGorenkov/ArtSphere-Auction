@@ -24,11 +24,15 @@ CREATE TABLE users (
     username        VARCHAR(50)  UNIQUE NOT NULL,          -- псевдоним
     display_name    VARCHAR(100) NOT NULL,                  -- имя + фамилия
     email           VARCHAR(255) UNIQUE,                    -- почта
-    wallet_address  VARCHAR(100) UNIQUE NOT NULL,           -- адрес кошелька
+    wallet_address  VARCHAR(100) UNIQUE NOT NULL,           -- внутренний адрес кошелька (legacy)
+    ton_wallet_address VARCHAR(48),                         -- TON Tonkeeper-адрес для payout (nullable)
     card_number     VARCHAR(19),                            -- номер карты
     avatar_url      TEXT,                                   -- фото профиля (MinIO)
     bio             TEXT DEFAULT '',
-    balance         DOUBLE PRECISION DEFAULT 10.0,
+    balance         DOUBLE PRECISION DEFAULT 50.0,                -- стартовый игровой баланс
+    total_volume_traded DOUBLE PRECISION NOT NULL DEFAULT 0,      -- объём для buyer-уровня (Bronze→Legend)
+    total_mints     INTEGER NOT NULL DEFAULT 0,                   -- кол-во созданных NFT для milestone-наград
+    last_daily_claim TIMESTAMPTZ,                                  -- последний claim дневного бонуса
     password_hash   TEXT NOT NULL,                          -- пароль (bcrypt)
     is_active       BOOLEAN DEFAULT TRUE,
     is_admin        BOOLEAN DEFAULT FALSE,                    -- флаг администратора
@@ -112,7 +116,7 @@ CREATE TABLE nft_tokens (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     artwork_id       UUID NOT NULL REFERENCES artworks(id) ON DELETE CASCADE,
     owner_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    contract_address VARCHAR(42) NOT NULL,                   -- адрес контракта NFT
+    contract_address VARCHAR(64) NOT NULL,                   -- адрес контракта NFT (TON 48 символов, Ethereum 42)
     token_id_on_chain VARCHAR(100),                          -- ID токена в блокчейне
     blockchain       VARCHAR(20) NOT NULL DEFAULT 'TON',     -- блокчейн
     status           VARCHAR(20) NOT NULL DEFAULT 'minted',  -- статус токена
@@ -151,7 +155,7 @@ CREATE TABLE auctions (
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     updated_at     TIMESTAMPTZ DEFAULT NOW(),
 
-    CONSTRAINT valid_auction_status CHECK (status IN ('upcoming', 'active', 'ended', 'sold')),
+    CONSTRAINT valid_auction_status CHECK (status IN ('upcoming', 'active', 'ended', 'sold', 'cancelled')),
     CONSTRAINT valid_prices         CHECK (starting_price > 0),
     CONSTRAINT valid_times          CHECK (end_time > start_time)
 );

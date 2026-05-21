@@ -54,7 +54,6 @@ enum ShowroomTheme: String, CaseIterable, Identifiable, Codable {
 
         // Decor
         let rugColor: UIColor
-        let showLouvreDecor: Bool   // chandelier, pedestals, vases, benches
     }
 
     var palette: Palette {
@@ -76,8 +75,7 @@ enum ShowroomTheme: String, CaseIterable, Identifiable, Codable {
                 fillIntensity:    350,
                 pictureIntensity: 25,
                 pictureColor:     UIColor(red: 1.0, green: 0.93, blue: 0.78, alpha: 1.0),
-                rugColor:         UIColor(red: 0.55, green: 0.18, blue: 0.18, alpha: 1.0),
-                showLouvreDecor:  true
+                rugColor:         UIColor(red: 0.55, green: 0.18, blue: 0.18, alpha: 1.0)
             )
         case .modern:
             return Palette(
@@ -96,8 +94,7 @@ enum ShowroomTheme: String, CaseIterable, Identifiable, Codable {
                 fillIntensity:    600,
                 pictureIntensity: 10,
                 pictureColor:     UIColor(red: 1.0, green: 0.99, blue: 0.96, alpha: 1.0),
-                rugColor:         UIColor(red: 0.88, green: 0.88, blue: 0.90, alpha: 1.0),
-                showLouvreDecor:  false
+                rugColor:         UIColor(red: 0.88, green: 0.88, blue: 0.90, alpha: 1.0)
             )
         case .loft:
             return Palette(
@@ -116,8 +113,7 @@ enum ShowroomTheme: String, CaseIterable, Identifiable, Codable {
                 fillIntensity:    280,
                 pictureIntensity: 80,
                 pictureColor:     UIColor(red: 1.0, green: 0.85, blue: 0.60, alpha: 1.0), // edison bulb glow
-                rugColor:         UIColor(red: 0.35, green: 0.28, blue: 0.22, alpha: 1.0),
-                showLouvreDecor:  false
+                rugColor:         UIColor(red: 0.35, green: 0.28, blue: 0.22, alpha: 1.0)
             )
         case .cyberpunk:
             return Palette(
@@ -136,8 +132,7 @@ enum ShowroomTheme: String, CaseIterable, Identifiable, Codable {
                 fillIntensity:    160,
                 pictureIntensity: 120,
                 pictureColor:     UIColor(red: 0.30, green: 0.85, blue: 1.0, alpha: 1.0), // cyan
-                rugColor:         UIColor(red: 0.80, green: 0.10, blue: 0.55, alpha: 1.0),
-                showLouvreDecor:  false
+                rugColor:         UIColor(red: 0.80, green: 0.10, blue: 0.55, alpha: 1.0)
             )
         }
     }

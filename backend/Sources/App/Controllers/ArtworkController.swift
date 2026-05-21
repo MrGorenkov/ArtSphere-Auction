@@ -40,7 +40,30 @@ struct ArtworkController: RouteCollection {
             .sort(\.$createdAt, .descending)
             .all()
 
-        return artworks.map { $0.toDTO() }
+        // Подтягиваем on-chain метаданные пачкой (LEFT JOIN nft_tokens).
+        let tokenMap = try await Self.loadTokenMap(for: artworks.compactMap { $0.id }, on: req.db)
+        return artworks.map { artwork in
+            let token = artwork.id.flatMap { tokenMap[$0] }
+            return artwork.toDTO(
+                tokenIdOnChain: token?.tokenId,
+                contractAddress: token?.contract,
+                explorerUrl: token?.explorerUrl
+            )
+        }
+    }
+
+    /// Возвращает мапу artworkId → on-chain метаданные за один запрос.
+    /// tokenId опциональный — если контракт ещё не успел инкрементить counter, поле nil.
+    static func loadTokenMap(for artworkIds: [UUID], on db: Database) async throws -> [UUID: (tokenId: String?, contract: String, explorerUrl: String?)] {
+        guard !artworkIds.isEmpty else { return [:] }
+        let tokens = try await NFTTokenModel.query(on: db)
+            .filter(\.$artwork.$id ~~ artworkIds)
+            .all()
+        var map: [UUID: (tokenId: String?, contract: String, explorerUrl: String?)] = [:]
+        for token in tokens {
+            map[token.$artwork.id] = (tokenId: token.tokenIdOnChain, contract: token.contractAddress, explorerUrl: token.metadataUri)
+        }
+        return map
     }
 
     // GET /api/v1/artworks/:artworkId
@@ -57,7 +80,9 @@ struct ArtworkController: RouteCollection {
             throw Abort(.notFound, reason: "Artwork not found")
         }
 
-        return artwork.toDTO()
+        let tokenMap = try await Self.loadTokenMap(for: [artworkId], on: req.db)
+        let token = tokenMap[artworkId]
+        return artwork.toDTO(tokenIdOnChain: token?.tokenId, contractAddress: token?.contract, explorerUrl: token?.explorerUrl)
     }
 
     // POST /api/v1/artworks
@@ -77,7 +102,7 @@ struct ArtworkController: RouteCollection {
             description: body.description ?? "",
             price: body.price,
             styleId: styleId,
-            blockchain: body.blockchain ?? "Polygon",
+            blockchain: body.blockchain ?? "TON",
             creatorId: userId
         )
 

@@ -7,6 +7,7 @@ struct ProfileView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var showNotifications = false
     @State private var showEditProfile = false
+    @State private var progress: APIUserProgress?
 
     var body: some View {
         NavigationStack {
@@ -36,19 +37,37 @@ struct ProfileView: View {
                     HStack {
                         Image(systemName: "creditcard.fill")
                             .foregroundStyle(.nftGreen)
-                        Text(L10n.balance)
-                            .font(NFTTypography.subheadline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Игровой баланс")
+                                .font(NFTTypography.subheadline)
+                            Text("используется для ставок в аукционе")
+                                .font(NFTTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         Text(auctionService.currentUser.formattedBalance)
                             .font(NFTTypography.bid)
                             .foregroundStyle(.nftGreen)
                     }
-                    
-                    // ==========================================
-                    // КНОПКА ПОДКЛЮЧЕНИЯ TONKEEPER
-                    // ==========================================
+
+                    // Реальный кошелёк (testnet) — отдельно, с реальным балансом из Toncenter.
+                    // При выигрыше аукциона на этот адрес уходит реальная TON-транзакция.
                     TONConnectButton()
                         .padding(.vertical, 4)
+                }
+
+                // Rewards / Progress
+                Section("Прогресс") {
+                    if let p = progress {
+                        RewardsCard(progress: p, onClaim: { Task { await claimDaily() } })
+                    } else {
+                        HStack {
+                            ProgressView().scaleEffect(0.7)
+                            Text("Загрузка прогресса…")
+                                .font(NFTTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 // Appearance
@@ -108,7 +127,7 @@ struct ProfileView: View {
                     HStack {
                         Text(L10n.network)
                         Spacer()
-                        Text("Polygon (Testnet)")
+                        Text("TON Testnet")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -170,7 +189,9 @@ struct ProfileView: View {
             .refreshable {
                 await auctionService.refreshProfile()
                 auctionService.fetchAPINotifications()
+                await loadProgress()
             }
+            .task { await loadProgress() }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
@@ -251,6 +272,26 @@ struct ProfileView: View {
         }
     }
 
+    // MARK: - Rewards loading
+
+    private func loadProgress() async {
+        do {
+            progress = try await NetworkService.shared.fetchProgress()
+        } catch {
+            print("loadProgress failed: \(error)")
+        }
+    }
+
+    private func claimDaily() async {
+        do {
+            progress = try await NetworkService.shared.claimDaily()
+            HapticService.medium()
+            await auctionService.refreshProfile() // обновить balance в шапке
+        } catch {
+            HapticService.warning()
+        }
+    }
+
     private func themeDisplayName(_ theme: ThemeManager.AppTheme) -> String {
         switch theme {
         case .system: return L10n.themeSystem
@@ -317,8 +358,10 @@ struct AvatarView: View {
             }
         }
 
-        // Load from URL (from server/MinIO)
-        guard let urlString = avatarUrl, let url = URL(string: urlString) else { return }
+        // Load from URL: либо реальная аватарка из MinIO, либо сгенерированный identicon
+        // по displayName (DiceBear) — даёт уникальную картинку каждому юзеру без аплоада.
+        let urlString = avatarUrl ?? Self.defaultIdenticonURL(for: displayName)
+        guard let url = URL(string: urlString) else { return }
         Task {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
@@ -329,6 +372,13 @@ struct AvatarView: View {
                 }
             } catch {}
         }
+    }
+
+    /// Детерминированная аватарка по seed. DiceBear identicon — генерирует геометрический
+    /// аватар уникальный для каждого имени. Хешированный URL гарантирует кэш на CDN.
+    static func defaultIdenticonURL(for seed: String) -> String {
+        let escaped = seed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? seed
+        return "https://api.dicebear.com/7.x/identicon/png?seed=\(escaped)&size=256"
     }
 }
 
@@ -551,5 +601,118 @@ struct NotificationsSheet: View {
         case "auction_ended": return .gray
         default: return .nftPurple
         }
+    }
+}
+// MARK: - Rewards card
+
+/// Карточка прогресса: уровень + объём + прогресс-бар до следующего уровня,
+/// кнопка daily-bonus + строка про creator-милстоуны.
+struct RewardsCard: View {
+    let progress: APIUserProgress
+    let onClaim: () -> Void
+
+    private var levelIcon: String {
+        switch progress.level {
+        case "silver":   return "medal.fill"
+        case "gold":     return "trophy.fill"
+        case "diamond":  return "diamond.fill"
+        case "legend":   return "crown.fill"
+        default:         return "shield.fill"
+        }
+    }
+    private var levelTitle: String {
+        switch progress.level {
+        case "silver":   return "Silver"
+        case "gold":     return "Gold"
+        case "diamond":  return "Diamond"
+        case "legend":   return "Legend"
+        default:         return "Bronze"
+        }
+    }
+    private var levelColor: Color {
+        switch progress.level {
+        case "silver":   return Color(red: 0.75, green: 0.75, blue: 0.78)
+        case "gold":     return Color(red: 0.95, green: 0.78, blue: 0.20)
+        case "diamond":  return Color(red: 0.45, green: 0.85, blue: 0.95)
+        case "legend":   return Color(red: 0.80, green: 0.35, blue: 0.95)
+        default:         return Color(red: 0.70, green: 0.45, blue: 0.20)
+        }
+    }
+    private var progressFraction: Double {
+        guard let nextAt = progress.nextLevelAt, nextAt > 0 else { return 1.0 }
+        return min(progress.totalVolumeTraded / nextAt, 1.0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Уровень
+            HStack(spacing: 10) {
+                Image(systemName: levelIcon).font(.title3).foregroundStyle(levelColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(levelTitle)
+                        .font(NFTTypography.headline).foregroundStyle(levelColor)
+                    Text(String(format: "Cashback %.0f%% с каждой ставки", progress.cashbackPct * 100))
+                        .font(NFTTypography.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            // Volume + прогресс
+            if let nextAt = progress.nextLevelAt, let nextLevel = progress.nextLevel, let reward = progress.nextLevelReward {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(String(format: "%.1f / %.0f TON", progress.totalVolumeTraded, nextAt))
+                            .font(NFTTypography.caption)
+                        Spacer()
+                        Text("до \(nextLevel.capitalized) (+\(Int(reward)) TON)")
+                            .font(NFTTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: progressFraction)
+                        .tint(levelColor)
+                }
+            } else {
+                Text("Максимальный уровень 🏆")
+                    .font(NFTTypography.caption).foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            // Daily bonus
+            HStack {
+                Image(systemName: "gift.fill").foregroundStyle(.nftGreen)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ежедневный бонус").font(NFTTypography.subheadline)
+                    Text("+5 TON / день").font(NFTTypography.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClaim) {
+                    Text(progress.dailyAvailable ? "Забрать" : "Получено")
+                        .font(NFTTypography.caption).fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(progress.dailyAvailable ? Color.nftGreen : Color.gray.opacity(0.4), in: Capsule())
+                }
+                .buttonStyle(.borderless)
+                .disabled(!progress.dailyAvailable)
+            }
+
+            Divider()
+
+            // Creator milestones
+            HStack {
+                Image(systemName: "paintpalette.fill").foregroundStyle(.nftOrange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Создано работ: \(progress.totalMints)").font(NFTTypography.subheadline)
+                    if let milestone = progress.nextMilestone {
+                        Text("До \(milestone) — \(milestone - progress.totalMints) работ").font(NFTTypography.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Все milestone выполнены 🎨").font(NFTTypography.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+        }
+        .padding(.vertical, 6)
     }
 }

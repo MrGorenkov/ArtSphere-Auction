@@ -80,6 +80,7 @@ struct MyCollectionView: View {
                     collectionName: selectedCollection?.name ?? L10n.allArtworks,
                     collectionId: selectedCollection?.id
                 )
+                .environmentObject(auctionService)
             }
         }
     }

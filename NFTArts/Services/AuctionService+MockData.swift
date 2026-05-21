@@ -52,7 +52,7 @@ extension AuctionService {
                 createdAt: Date().addingTimeInterval(-Double(index) * 86400),
                 tokenId: String(format: "%04d", index + 1),
                 contractAddress: "0x\(String(repeating: "a", count: 40))",
-                blockchain: index % 2 == 0 ? .ethereum : .polygon,
+                blockchain: .ton,
                 imageSource: hasBundled ? .bundled : .procedural
             )
         }

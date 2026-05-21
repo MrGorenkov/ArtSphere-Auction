@@ -70,9 +70,12 @@ struct AuctionController: RouteCollection {
                 bid.toDTO(userName: bid.user.displayName)
             }
 
+        let tokenMap = try await ArtworkController.loadTokenMap(for: [auction.$artwork.id], on: req.db)
+        let token = tokenMap[auction.$artwork.id]
+
         return AuctionDetailDTO(
             auction: auction.toDTO(),
-            artwork: auction.artwork.toDTO(),
+            artwork: auction.artwork.toDTO(tokenIdOnChain: token?.tokenId, contractAddress: token?.contract, explorerUrl: token?.explorerUrl),
             bids: bids
         )
     }

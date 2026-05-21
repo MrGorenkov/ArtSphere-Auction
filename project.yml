@@ -22,6 +22,11 @@ targets:
       - path: NFTArts
         excludes:
           - "**/.DS_Store"
+          - "Resources/ML/DepthAnythingV2SmallF16INT8.mlpackage"
+      # .mlpackage явно в Compile Sources — иначе Xcode не запускает coremlc и в bundle
+      # не появляется скомпилированный .mlmodelc → DepthEstimator не находит модель.
+      - path: NFTArts/Resources/ML/DepthAnythingV2SmallF16INT8.mlpackage
+        buildPhase: sources
     settings:
       base:
         INFOPLIST_FILE: NFTArts/Info.plist
@@ -34,8 +39,6 @@ targets:
         SUPPORTS_MACCATALYST: false
     resources:
       - path: NFTArts/Resources/Assets.xcassets
-      - path: NFTArts/Resources/ML/DepthAnythingV2SmallF16INT8.mlpackage
-        buildPhase: resources
 
 
   NFTArtsAdmin:

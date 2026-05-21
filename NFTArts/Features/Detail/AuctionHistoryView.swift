@@ -19,7 +19,7 @@ struct AuctionHistoryView: View {
                     .padding(.top, 60)
                 } else {
                     ForEach(auctionService.completedAuctions) { auction in
-                        NavigationLink(destination: ArtworkDetailView(auction: auction)) {
+                        NavigationLink(destination: ArtworkDetailView(auction: auction).environmentObject(auctionService)) {
                             completedAuctionCard(auction)
                         }
                         .tint(.primary)

@@ -17,25 +17,28 @@ enum NormalMapGenerator {
     ///   qualitatively richer than any single classical filter.
     enum FilterAlgorithm: String, CaseIterable, Identifiable {
         case sobel
-        case laplacian
         case hybrid
+        /// 3D point cloud (depth back-projection): каждый пиксель — точка в 3D-пространстве
+        /// с цветом из image. Splat-style визуализация, отдельный рендер-pipeline.
+        case pointCloud
 
         var id: String { rawValue }
 
         /// Compact label for the on-screen toggle button.
         var shortLabel: String {
             switch self {
-            case .sobel:     return "Sobel"
-            case .laplacian: return "Lap"
-            case .hybrid:    return "AI"
+            case .sobel:      return "Sobel"
+            case .hybrid:     return "AI Mesh"
+            case .pointCloud: return "Splat"
             }
         }
     }
 
-    /// Default pipeline. Hybrid uses the Neural Engine for global depth, classical
-    /// Laplacian for fine detail — the strongest combination available on-device.
-    /// Falls back to Laplacian automatically if the CoreML model isn't loaded.
-    static var defaultAlgorithm: FilterAlgorithm = .hybrid
+    /// Default pipeline.
+    /// Sobel — самый быстрый, без CoreML, работает мгновенно.
+    /// User-preference (отчёт 2026-05-19): дефолт во всех превью (Create, Showroom, Detail).
+    /// Laplacian / Hybrid доступны через переключатель алгоритма в детальной view.
+    static var defaultAlgorithm: FilterAlgorithm = .sobel
 
     // MARK: - Cache
 
@@ -104,14 +107,12 @@ enum NormalMapGenerator {
         switch algorithm {
         case .sobel:
             result = generateSobel(from: image, strength: strength)
-        case .laplacian:
-            result = generateLaplacian(from: image, strength: strength)
         case .hybrid:
-            if DepthEstimator.shared.isAvailable {
-                result = generateHybrid(from: image, strength: strength, cacheKey: cacheKey)
-            } else {
-                result = generateLaplacian(from: image, strength: strength)
-            }
+            // DepthEstimator имеет luminance-fallback, поэтому generateHybrid всегда работает.
+            result = generateHybrid(from: image, strength: strength, cacheKey: cacheKey)
+        case .pointCloud:
+            // Point cloud не использует normal map. Fallback на Sobel для consistency.
+            result = generateSobel(from: image, strength: strength)
         }
         if let raw = cacheKey {
             Cache.normalMap.setObject(result, forKey: Cache.key(raw, suffix: cacheSuffix))
@@ -668,7 +669,9 @@ enum NormalMapGenerator {
         // In hybrid mode the displacement map is the depth estimation itself: brighter
         // pixels (closer) get pushed outwards by SceneKit's displacement intensity, so
         // perspective in the painting becomes physical relief on the SCNPlane.
-        if algorithm == .hybrid, DepthEstimator.shared.isAvailable,
+        // DepthEstimator всегда вернёт depth (CoreML или luminance fallback),
+        // поэтому проверка isAvailable больше не нужна.
+        if algorithm == .hybrid,
            let depth = DepthEstimator.shared.depthMap(for: image, cacheKey: cacheKey) {
             if let raw = cacheKey {
                 Cache.heightmap.setObject(depth, forKey: Cache.key(raw, suffix: suffix))

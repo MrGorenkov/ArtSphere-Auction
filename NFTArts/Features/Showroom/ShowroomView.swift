@@ -14,8 +14,8 @@ struct ShowroomView: View {
     @StateObject private var controller = ShowroomController()
     @State private var showHint = true
     @State private var scene: SCNScene?
-    @State private var cameraMode: CameraMode = .orbit
     @AppStorage("showroom_theme") private var themeRaw: String = ShowroomTheme.louvre.rawValue
+    @AppStorage("showroom_lighting") private var lightingRaw: String = LightingMode.gallery.rawValue
     @State private var tappedPainting: PaintingTap?
     @State private var rearrangeMode: Bool = false
     @State private var firstSelectedId: UUID?
@@ -26,11 +26,37 @@ struct ShowroomView: View {
     private var theme: ShowroomTheme {
         ShowroomTheme(rawValue: themeRaw) ?? .louvre
     }
+    private var lighting: LightingMode {
+        LightingMode(rawValue: lightingRaw) ?? .gallery
+    }
 
+    /// Камера в шоуруме только orbit (юзер статичный, сцена вращается вокруг центра).
+    /// Walk-режим убран — оказался дезориентирующим (отзыв 2026-05-19).
     enum CameraMode {
-        case orbit, walk
-        var icon: String { self == .orbit ? "arrow.triangle.2.circlepath" : "figure.walk" }
-        var sceneKitMode: SCNInteractionMode { self == .orbit ? .orbitTurntable : .fly }
+        case orbit
+        // .fly = drag вращает обзор без перемещения камеры (юзер статичен в центре зала).
+        // .orbitTurntable пытается двигать камеру по орбите вокруг target — для нашего
+        // кейса "юзер в центре" это не подходит.
+        var sceneKitMode: SCNInteractionMode { .fly }
+    }
+
+    /// Modifier поверх палитры темы — даёт юзеру переключать освещение.
+    enum LightingMode: String, CaseIterable {
+        case gallery, day, night
+        var icon: String {
+            switch self {
+            case .gallery: return "lightbulb.fill"
+            case .day:     return "sun.max.fill"
+            case .night:   return "moon.fill"
+            }
+        }
+        var next: LightingMode {
+            switch self {
+            case .gallery: return .day
+            case .day:     return .night
+            case .night:   return .gallery
+            }
+        }
     }
 
     /// Identifiable wrapper so we can use `.fullScreenCover(item:)`.
@@ -46,7 +72,7 @@ struct ShowroomView: View {
                 SceneKitContainer(
                     controller: controller,
                     scene: scene,
-                    cameraMode: cameraMode,
+                    cameraMode: .orbit,
                     onPaintingTapped: handlePaintingTap
                 )
                 .ignoresSafeArea()
@@ -63,8 +89,7 @@ struct ShowroomView: View {
                 }
                 Spacer()
                 if !rearrangeMode {
-                    walkPad
-                        .transition(.opacity)
+                    orbitPad.transition(.opacity)
                 }
                 if let toast = transientToast {
                     Text(toast)
@@ -103,6 +128,7 @@ struct ShowroomView: View {
                             }
                         }
                 }
+                .environmentObject(auctionService)
             }
         }
     }
@@ -142,11 +168,11 @@ struct ShowroomView: View {
                 iconButton(theme.icon)
             }
             Button {
-                HapticService.medium()
-                withAnimation { cameraMode = (cameraMode == .orbit) ? .walk : .orbit }
-                controller.applyCameraMode(cameraMode)
+                HapticService.light()
+                lightingRaw = lighting.next.rawValue
+                controller.applyLighting(lighting, themePalette: theme.palette)
             } label: {
-                iconButton(cameraMode.icon)
+                iconButton(lighting.icon)
             }
             Button {
                 HapticService.tap()
@@ -217,18 +243,15 @@ struct ShowroomView: View {
         .padding(.horizontal, 12)
     }
 
-    private var walkPad: some View {
-        let isWalk = cameraMode == .walk
-        return VStack(spacing: 6) {
-            walkButton(isWalk ? "arrow.up" : "plus.magnifyingglass",
-                       action: { controller.navigate(.forward, mode: cameraMode) })
+    /// Кнопки управления orbit-камерой — юзер стоит в центре и крутит обзор.
+    /// Вверх/вниз = зум, влево/вправо = вращение вокруг центра.
+    private var orbitPad: some View {
+        VStack(spacing: 6) {
+            orbitButton("plus.magnifyingglass", action: { controller.orbit(.zoomIn) })
             HStack(spacing: 6) {
-                walkButton("arrow.turn.up.left",
-                           action: { controller.navigate(.turnLeft, mode: cameraMode) })
-                walkButton(isWalk ? "arrow.down" : "minus.magnifyingglass",
-                           action: { controller.navigate(.backward, mode: cameraMode) })
-                walkButton("arrow.turn.up.right",
-                           action: { controller.navigate(.turnRight, mode: cameraMode) })
+                orbitButton("arrow.turn.up.left", action: { controller.orbit(.rotateLeft) })
+                orbitButton("minus.magnifyingglass", action: { controller.orbit(.zoomOut) })
+                orbitButton("arrow.turn.up.right", action: { controller.orbit(.rotateRight) })
             }
         }
         .padding(12)
@@ -236,7 +259,7 @@ struct ShowroomView: View {
         .padding(.bottom, 80)
     }
 
-    private func walkButton(_ icon: String, action: @escaping () -> Void) -> some View {
+    private func orbitButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button {
             HapticService.light()
             action()
@@ -262,8 +285,7 @@ struct ShowroomView: View {
             if rearrangeMode {
                 Label(L10n.showroomHintLongPress, systemImage: "rectangle.3.group")
             } else {
-                Label(cameraMode == .orbit ? L10n.showroomHintDrag : L10n.showroomHintWalk,
-                      systemImage: cameraMode == .orbit ? "hand.draw" : "figure.walk")
+                Label(L10n.showroomHintDrag, systemImage: "hand.draw")
                 Label(L10n.showroomHintTap, systemImage: "hand.tap")
             }
         }
@@ -340,62 +362,47 @@ struct ShowroomView: View {
 final class ShowroomController: ObservableObject {
     weak var scnView: SCNView?
 
-    enum NavDirection { case forward, backward, turnLeft, turnRight }
+    enum OrbitAction { case rotateLeft, rotateRight, zoomIn, zoomOut }
 
-    /// Moves the camera. In walk mode forward/back steps along the camera's facing direction;
-    /// in orbit mode forward/back zooms toward/away from the room centre. Turns always rotate.
-    func navigate(_ direction: NavDirection, mode: ShowroomView.CameraMode) {
+    /// Юзер стоит в центре зала и вращает обзор по yaw — точно как осматриваться вокруг.
+    /// Никаких look(at:) на пивот: куда повернул — туда и смотришь.
+    func orbit(_ action: OrbitAction) {
         guard let pov = scnView?.pointOfView else { return }
-        let stepDistance: Float = 0.6
-        let zoomDistance: Float = 0.5
-        let turnAngle: Float = .pi / 8
-
-        switch direction {
-        case .forward, .backward:
-            let sign: Float = (direction == .forward) ? 1 : -1
-            // Local camera forward is -Z; converting through pov gives world-space forward.
-            let forwardLocal = SCNVector3(0, 0, -1)
-            let forwardWorld = pov.convertVector(forwardLocal, to: nil)
-            let stride = (mode == .walk) ? stepDistance : zoomDistance
-            let dx = forwardWorld.x * stride * sign
-            let dy = (mode == .walk) ? 0 : forwardWorld.y * stride * sign
-            let dz = forwardWorld.z * stride * sign
-            let target = SCNVector3(
-                min(max(pov.position.x + dx, -5.5), 5.5),
-                min(max(pov.position.y + dy,  0.6), Float(roomHeightLimit)),
-                min(max(pov.position.z + dz, -5.5), 5.5)
-            )
-            let move = SCNAction.move(to: target, duration: 0.25)
-            move.timingMode = .easeInEaseOut
-            pov.runAction(move)
-        case .turnLeft, .turnRight:
-            let delta: Float = (direction == .turnLeft) ? turnAngle : -turnAngle
-            let rotate = SCNAction.rotateBy(x: 0, y: CGFloat(delta), z: 0, duration: 0.25)
+        switch action {
+        case .rotateLeft, .rotateRight:
+            let delta: CGFloat = (action == .rotateLeft) ? .pi / 12 : -.pi / 12 // ~15°
+            let rotate = SCNAction.rotateBy(x: 0, y: delta, z: 0, duration: 0.25)
             rotate.timingMode = .easeInEaseOut
             pov.runAction(rotate)
+        case .zoomIn, .zoomOut:
+            // Зум через field-of-view камеры — юзер физически остаётся на месте,
+            // но картина приближается/отдаляется визуально.
+            guard let camera = pov.camera else { return }
+            let step: CGFloat = (action == .zoomIn) ? -8 : 8
+            let target = min(max(camera.fieldOfView + step, 25), 90)
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = 0.25
+            camera.fieldOfView = target
+            SCNTransaction.commit()
         }
     }
 
-    /// Soft cap matching the showroom ceiling so the user can't fly into the roof.
-    private let roomHeightLimit: Float = 4.0
-
+    /// Возвращает в стартовое положение: камера в центре, смотрит на север, FOV дефолтный.
     func recenter() {
         guard let pov = scnView?.pointOfView else { return }
-        let move = SCNAction.move(to: SCNVector3(0, 1.7, 0), duration: 0.4)
-        let rotate = SCNAction.rotateTo(x: 0, y: 0, z: 0, duration: 0.4)
-        move.timingMode = .easeInEaseOut
-        rotate.timingMode = .easeInEaseOut
-        pov.runAction(SCNAction.group([move, rotate]))
+        SCNTransaction.begin()
+        SCNTransaction.animationDuration = 0.4
+        pov.position = SCNVector3(0, 1.7, 0)
+        pov.eulerAngles = SCNVector3(0, 0, 0)
+        pov.camera?.fieldOfView = 65
+        SCNTransaction.commit()
     }
 
-    func applyCameraMode(_ mode: ShowroomView.CameraMode) {
-        guard let scnView else { return }
-        scnView.defaultCameraController.interactionMode = mode.sceneKitMode
-        if mode == .walk {
-            // Place camera at room centre at eye-height for first-person experience.
-            scnView.pointOfView?.position = SCNVector3(0, 1.7, 0)
-            scnView.pointOfView?.eulerAngles = SCNVector3(0, 0, 0)
-        }
+    /// Применяет лайтинг-модификатор поверх палитры темы.
+    /// gallery — палитра темы as-is; day — поднимаем ambient, day-light; night — гасим всё, accent на картины.
+    func applyLighting(_ mode: ShowroomView.LightingMode, themePalette: ShowroomTheme.Palette) {
+        guard let scene = scnView?.scene else { return }
+        ShowroomSceneBuilder.applyLighting(mode, themePalette: themePalette, to: scene)
     }
 
     /// Swaps the wall positions of two paintings in-place (no scene rebuild).

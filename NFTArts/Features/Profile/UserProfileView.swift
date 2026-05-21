@@ -14,9 +14,12 @@ struct UserProfileView: View {
     @State private var isLoadingFollow = false
 
     var body: some View {
-        List {
-            // Profile header
-            Section {
+        // ScrollView, а не List — SwiftUI List Sections активируют все NavigationLink-и
+        // строки одним тапом, даже с .buttonStyle(.borderless). Эту проблему нельзя
+        // починить локально, поэтому весь экран теперь через ScrollView.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+            Group {
                 VStack(spacing: 12) {
                     HStack(spacing: 16) {
                         AvatarView(
@@ -43,16 +46,39 @@ struct UserProfileView: View {
                         Spacer()
                     }
 
-                    // Stats row
+                    // Stats row — каждая колонка кликабельная, ведёт на свой список.
+                    // .buttonStyle(.borderless) — обязательно в List Section, иначе SwiftUI
+                    // активирует ВСЕ кнопки строки одним тапом.
                     HStack(spacing: 0) {
-                        statItem(value: profile?.artworksCount ?? 0, label: L10n.userArtworks)
+                        NavigationLink {
+                            UserListView(mode: .worksOf(userId: userId, name: profile?.displayName ?? userName))
+                                .environmentObject(auctionService)
+                        } label: {
+                            statItem(value: profile?.artworksCount ?? 0, label: L10n.userArtworks)
+                        }
+                        .buttonStyle(.borderless)
                         Divider().frame(height: 30)
-                        statItem(value: followersCount, label: L10n.followers)
+                        NavigationLink {
+                            UserListView(mode: .followers(userId: userId))
+                                .environmentObject(auctionService)
+                        } label: {
+                            statItem(value: followersCount, label: L10n.followers)
+                        }
+                        .buttonStyle(.borderless)
                         Divider().frame(height: 30)
-                        statItem(value: followingCount, label: L10n.following)
+                        NavigationLink {
+                            UserListView(mode: .following(userId: userId))
+                                .environmentObject(auctionService)
+                        } label: {
+                            statItem(value: followingCount, label: L10n.following)
+                        }
+                        .buttonStyle(.borderless)
                     }
 
-                    // Action buttons
+                    // Action buttons.
+                    // ВАЖНО: в SwiftUI List один тап по строке активирует ВСЕ Button-ы и
+                    // NavigationLink-и внутри. .buttonStyle(.borderless) отключает это
+                    // поведение и заставляет каждую кнопку реагировать только на свой тап.
                     HStack(spacing: 12) {
                         Button {
                             toggleFollow()
@@ -69,6 +95,7 @@ struct UserProfileView: View {
                             .background(isFollowing ? Color(.tertiarySystemBackground) : Color.nftPurple)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
+                        .buttonStyle(.borderless)
                         .disabled(isLoadingFollow)
 
                         NavigationLink {
@@ -86,81 +113,138 @@ struct UserProfileView: View {
                             .background(Color.nftPurple.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
+                        .buttonStyle(.borderless)
+                    }
+
+                    // Шоурум юзера — открывает его работы в 3D-зале.
+                    // Это и есть «шеринг шоурума»: кто угодно может зайти в чужой профиль
+                    // и тапнуть кнопку — увидит работы этого юзера в выбранной теме.
+                    let userArtworks = auctionService.auctions.filter { $0.creatorId == userId }.map { $0.artwork }
+                    if !userArtworks.isEmpty {
+                        NavigationLink {
+                            ShowroomView(
+                                artworks: userArtworks,
+                                collectionName: profile?.displayName ?? userName,
+                                collectionId: nil
+                            )
+                            .environmentObject(auctionService)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "cube.transparent")
+                                Text(L10n.showroom)
+                            }
+                            .font(NFTTypography.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(LinearGradient.nftPrimary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.borderless)
+                        .padding(.top, 4)
                     }
                 }
                 .padding(.vertical, 4)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+
+            sectionDivider
 
             // User's artworks (created)
-            Section(L10n.userArtworks) {
-                let userArtworks = auctionService.auctions.filter { $0.creatorId == userId }
-                if userArtworks.isEmpty {
-                    Text(L10n.noRecentActivity)
-                        .font(NFTTypography.body)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 8)
-                } else {
+            sectionHeader(L10n.userArtworks)
+            let userArtworks = auctionService.auctions.filter { $0.creatorId == userId }
+            if userArtworks.isEmpty {
+                emptyHint
+            } else {
+                LazyVStack(spacing: 8) {
                     ForEach(userArtworks) { auction in
-                        NavigationLink(destination: ArtworkDetailView(auction: auction)) {
-                            HStack(spacing: 12) {
-                                ArtworkImageView(artwork: auction.artwork)
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(auction.artwork.title)
-                                        .font(NFTTypography.subheadline)
-                                        .fontWeight(.medium)
-                                    Text(auction.formattedCurrentBid)
-                                        .font(NFTTypography.caption)
-                                        .foregroundStyle(.nftPurple)
-                                }
-                            }
+                        NavigationLink {
+                            ArtworkDetailView(auction: auction).environmentObject(auctionService)
+                        } label: {
+                            artworkRow(auction: auction, subtitle: auction.formattedCurrentBid, subtitleColor: .nftPurple)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 16)
             }
 
+            sectionDivider
+
             // Auction activity (bids placed by this user)
-            Section(L10n.auctionActivity) {
-                let bidAuctions = auctionService.auctions.filter { auction in
-                    auction.bids.contains { $0.userId == userId }
-                }
-                if bidAuctions.isEmpty {
-                    Text(L10n.noRecentActivity)
-                        .font(NFTTypography.body)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 8)
-                } else {
+            sectionHeader(L10n.auctionActivity)
+            let bidAuctions = auctionService.auctions.filter { auction in
+                auction.bids.contains { $0.userId == userId }
+            }
+            if bidAuctions.isEmpty {
+                emptyHint
+            } else {
+                LazyVStack(spacing: 8) {
                     ForEach(bidAuctions) { auction in
                         let userBids = auction.bids.filter { $0.userId == userId }
                         let highestBid = userBids.max(by: { $0.amount < $1.amount })
-
-                        NavigationLink(destination: ArtworkDetailView(auction: auction)) {
-                            HStack(spacing: 12) {
-                                ArtworkImageView(artwork: auction.artwork)
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(auction.artwork.title)
-                                        .font(NFTTypography.subheadline)
-                                        .fontWeight(.medium)
-                                    if let bid = highestBid {
-                                        Text(L10n.bidsCount(userBids.count) + " — " + bid.formattedAmount)
-                                            .font(NFTTypography.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
+                        let subtitle = highestBid.map { L10n.bidsCount(userBids.count) + " — " + $0.formattedAmount } ?? ""
+                        NavigationLink {
+                            ArtworkDetailView(auction: auction).environmentObject(auctionService)
+                        } label: {
+                            artworkRow(auction: auction, subtitle: subtitle, subtitleColor: .secondary)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 16)
             }
+
+            Spacer(minLength: 24)
+            } // VStack
         }
         .navigationTitle(profile?.displayName ?? userName)
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadProfile() }
+    }
+
+    private var sectionDivider: some View {
+        Divider().padding(.horizontal, 16)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(NFTTypography.headline)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+    }
+
+    private var emptyHint: some View {
+        Text(L10n.noRecentActivity)
+            .font(NFTTypography.body)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+    }
+
+    private func artworkRow(auction: Auction, subtitle: String, subtitleColor: Color) -> some View {
+        HStack(spacing: 12) {
+            ArtworkImageView(artwork: auction.artwork)
+                .frame(width: 50, height: 50)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(auction.artwork.title)
+                    .font(NFTTypography.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(NFTTypography.caption)
+                    .foregroundStyle(subtitleColor)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(10)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .contentShape(Rectangle())
     }
 
     private func statItem(value: Int, label: String) -> some View {

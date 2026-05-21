@@ -48,8 +48,29 @@ struct BidController: RouteCollection {
             .with(\.$user)
             .first()
 
+        // Escrow-логика:
+        // 1) Возвращаем предыдущую активную ставку её владельцу (даже если это тот же юзер —
+        //    иначе при self-overbid он теряет старую сумму, см. отчёт user 2026-05-19).
+        // 2) Списываем новую ставку с user.balance (его деньги уходят в эскроу аукциона).
+        if let prevBid = previousHighBidder {
+            if prevBid.$user.id == userId {
+                // Та же сессия Fluent-юзера — модифицируем `user`, не `prevBid.user`,
+                // чтобы не было двух копий и кто-то не перетёр другого.
+                user.balance += prevBid.amount
+            } else {
+                prevBid.user.balance += prevBid.amount
+                try await prevBid.user.save(on: req.db)
+            }
+        }
+
+        user.balance -= body.amount
+        try await user.save(on: req.db)
+
         let bid = BidModel(auctionId: auctionId, userId: userId, amount: body.amount)
         try await bid.save(on: req.db)
+
+        // Rewards: volume для buyer-уровня + cashback + level-up бонус (atomically).
+        try await RewardsEngine.onBidPlaced(user: user, amount: body.amount, on: req.db)
 
         let bidDTO = bid.toDTO(userName: user.displayName)
 
@@ -159,8 +180,23 @@ struct BidController: RouteCollection {
                 return
             }
 
+            // Escrow: возвращаем предыдущую ставку владельцу (даже если это тот же юзер),
+            // затем списываем новую с winnerBroker.
+            if let prevBid = previousHighBidder {
+                if prevBid.$user.id == winnerBroker.$user.id {
+                    winnerBroker.user.balance += prevBid.amount
+                } else {
+                    prevBid.user.balance += prevBid.amount
+                    try await prevBid.user.save(on: db)
+                }
+            }
+            winnerBroker.user.balance -= nextBidAmount
+            try await winnerBroker.user.save(on: db)
+
             let newBid = BidModel(auctionId: auctionId, userId: winnerBroker.$user.id, amount: nextBidAmount)
             try await newBid.save(on: db)
+            // Авто-брокер тоже триггерит rewards для своего владельца.
+            try await RewardsEngine.onBidPlaced(user: winnerBroker.user, amount: nextBidAmount, on: db)
 
             // Считаем актуальное количество ставок свежим запросом —
             // на лесенке из нескольких авто-ставок нельзя полагаться на закэшированный auction.bidCount.
@@ -214,6 +250,24 @@ struct BidController: RouteCollection {
                 failed.append(input.id)
                 continue
             }
+
+            // Escrow для offline-синхронизированной ставки: те же правила.
+            let previousHighBidder = try await BidModel.query(on: req.db)
+                .filter(\.$auction.$id == auctionId)
+                .sort(\.$amount, .descending)
+                .with(\.$user)
+                .first()
+
+            if let prevBid = previousHighBidder {
+                if prevBid.$user.id == userId {
+                    user.balance += prevBid.amount
+                } else {
+                    prevBid.user.balance += prevBid.amount
+                    try await prevBid.user.save(on: req.db)
+                }
+            }
+            user.balance -= input.amount
+            try await user.save(on: req.db)
 
             let bid = BidModel(auctionId: auctionId, userId: userId, amount: input.amount, synced: true)
             try await bid.save(on: req.db)

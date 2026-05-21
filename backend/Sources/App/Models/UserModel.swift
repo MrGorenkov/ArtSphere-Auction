@@ -9,10 +9,14 @@ final class UserModel: Model, Content, @unchecked Sendable {
     @Field(key: "display_name") var displayName: String
     @OptionalField(key: "email") var email: String?
     @Field(key: "wallet_address") var walletAddress: String
+    @OptionalField(key: "ton_wallet_address") var tonWalletAddress: String?
     @OptionalField(key: "card_number") var cardNumber: String?
     @Field(key: "bio") var bio: String
     @OptionalField(key: "avatar_url") var avatarUrl: String?
     @Field(key: "balance") var balance: Double
+    @Field(key: "total_volume_traded") var totalVolumeTraded: Double
+    @Field(key: "total_mints") var totalMints: Int
+    @OptionalField(key: "last_daily_claim") var lastDailyClaim: Date?
     @Field(key: "password_hash") var passwordHash: String
     @Field(key: "is_active") var isActive: Bool
     @Field(key: "is_admin") var isAdmin: Bool
@@ -33,7 +37,7 @@ final class UserModel: Model, Content, @unchecked Sendable {
         walletAddress: String,
         cardNumber: String? = nil,
         bio: String = "",
-        balance: Double = 10.0,
+        balance: Double = 50.0,
         passwordHash: String
     ) {
         self.id = id
@@ -44,6 +48,8 @@ final class UserModel: Model, Content, @unchecked Sendable {
         self.cardNumber = cardNumber
         self.bio = bio
         self.balance = balance
+        self.totalVolumeTraded = 0
+        self.totalMints = 0
         self.passwordHash = passwordHash
         self.isActive = true
         self.isAdmin = false

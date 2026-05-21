@@ -400,6 +400,20 @@ struct APIUser: Codable, Identifiable {
     let avatarUrl: String?
 }
 
+/// Состояние bonus-системы для текущего юзера. См. RewardsEngine на бэкенде.
+struct APIUserProgress: Codable {
+    let balance: Double
+    let totalVolumeTraded: Double
+    let totalMints: Int
+    let level: String              // bronze/silver/gold/diamond/legend
+    let cashbackPct: Double
+    let nextLevel: String?
+    let nextLevelAt: Double?
+    let nextLevelReward: Double?
+    let nextMilestone: Int?
+    let dailyAvailable: Bool
+}
+
 struct APIArtwork: Codable, Identifiable {
     let id: String
     let title: String
@@ -413,6 +427,10 @@ struct APIArtwork: Codable, Identifiable {
     let styleName: String?
     let blockchain: String
     let createdAt: String
+    // On-chain метаданные (nil если NFT ещё не сминтнут).
+    let tokenIdOnChain: String?
+    let contractAddress: String?
+    let explorerUrl: String?
 }
 
 struct APIAuction: Codable, Identifiable {
@@ -722,6 +740,14 @@ extension NetworkService {
         try await request(endpoint: "users/me")
     }
 
+    func fetchProgress() async throws -> APIUserProgress {
+        try await request(endpoint: "users/me/progress")
+    }
+
+    func claimDaily() async throws -> APIUserProgress {
+        try await request(endpoint: "users/me/claim-daily", method: .post)
+    }
+
     func updateProfile(displayName: String?, bio: String?, avatarUrl: String?) async throws -> APIUser {
         struct UpdateProfileBody: Codable {
             let displayName: String?
@@ -844,6 +870,15 @@ extension NetworkService {
 
     func fetchFollowers() async throws -> [APIUser] {
         try await request(endpoint: "users/me/followers")
+    }
+
+    /// Для просмотра подписок/подписчиков чужого юзера в UserProfileView.
+    func fetchFollowing(of userId: String) async throws -> [APIUser] {
+        try await request(endpoint: "users/\(userId)/following")
+    }
+
+    func fetchFollowers(of userId: String) async throws -> [APIUser] {
+        try await request(endpoint: "users/\(userId)/followers")
     }
 
     func searchUsers(query: String) async throws -> [APIUser] {

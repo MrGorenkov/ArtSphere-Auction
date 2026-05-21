@@ -9,8 +9,7 @@ struct NFTTokenController: RouteCollection {
 
     // POST /api/v1/nft/mint
     func mintNFT(req: Request) async throws -> NFTTokenDTO {
-        let user = try req.auth.require(UserModel.self)
-        let userId = try user.requireID()
+        let userId = try req.auth.require(UUID.self)
         let body = try req.content.decode(MintNFTRequest.self)
 
         guard let artworkId = UUID(uuidString: body.artworkId) else {
@@ -43,9 +42,19 @@ struct NFTTokenController: RouteCollection {
         )
         try await token.save(on: req.db)
 
-        // metadataUri используется для ссылки в эксплорер — показывает все транзакции коллекции
-        token.metadataUri = "https://testnet.tonviewer.com/\(mintResult.collection)"
+        // metadataUri — прямая ссылка на mint-транзакцию в эксплорере (если есть hash),
+        // иначе fallback на адрес коллекции (страница со всеми transactions).
+        if let hash = mintResult.txHash, !hash.isEmpty {
+            token.metadataUri = "https://testnet.tonviewer.com/transaction/\(hash)"
+        } else {
+            token.metadataUri = "https://testnet.tonviewer.com/\(mintResult.collection)"
+        }
         try await token.save(on: req.db)
+
+        // Creator-rewards: бонус за mint + milestone-бонусы (5/15/30 работ).
+        if let creator = try await UserModel.find(userId, on: req.db) {
+            try await RewardsEngine.onMint(user: creator, on: req.db)
+        }
 
         return NFTTokenDTO(
             id: try token.requireID().uuidString,
@@ -70,6 +79,7 @@ struct NFTTokenController: RouteCollection {
         let tokenId: String
         let collection: String
         let artworkId: String
+        let txHash: String?
     }
 
     private struct MinterError: Content {

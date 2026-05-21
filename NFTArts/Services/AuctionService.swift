@@ -770,7 +770,7 @@ final class AuctionService: ObservableObject {
 
     // MARK: - Create NFT
 
-    func createNFTFromImage(image: UIImage, title: String, description: String, category: NFTArtwork.ArtworkCategory, startingPrice: Double, durationHours: Double, blockchain: NFTArtwork.BlockchainNetwork = .ethereum, buyNowPrice: Double? = nil) -> Auction {
+    func createNFTFromImage(image: UIImage, title: String, description: String, category: NFTArtwork.ArtworkCategory, startingPrice: Double, durationHours: Double, blockchain: NFTArtwork.BlockchainNetwork = .ton, buyNowPrice: Double? = nil) -> Auction {
         analytics.trackNFTCreated(title: title, category: category.rawValue, startingPrice: startingPrice)
         let imageData = image.jpegData(compressionQuality: 0.8)
         let complexityScore = NormalMapGenerator.calculateTextureMetric(from: image)

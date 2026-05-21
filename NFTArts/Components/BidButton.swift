@@ -18,9 +18,11 @@ struct BidButton: View {
                 Text(L10n.placeBid)
                     .font(NFTTypography.caption)
                     .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
                 LinearGradient.nftPrimary

@@ -138,7 +138,7 @@ struct FeedView: View {
         }
         .padding(.vertical, 8)
         .navigationDestination(for: Auction.self) { auction in
-            ArtworkDetailView(auction: auction)
+            ArtworkDetailView(auction: auction).environmentObject(auctionService)
         }
     }
 
@@ -158,7 +158,7 @@ struct FeedView: View {
         .padding(.top, 8)
         .padding(.bottom, 20)
         .navigationDestination(for: Auction.self) { auction in
-            ArtworkDetailView(auction: auction)
+            ArtworkDetailView(auction: auction).environmentObject(auctionService)
         }
         .onAppear { cardsAppeared = true }
     }

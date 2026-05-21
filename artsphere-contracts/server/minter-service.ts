@@ -6,6 +6,8 @@
 /// Эндпоинты:
 ///   GET  /health       → {status: 'ok'}
 ///   POST /mint         body: {artworkId}    →  {tokenId, collection, artworkId}
+///   POST /payout       body: {address, amountTON}  →  {address, amountTON}
+///                      Отправляет реальный testnet TON-перевод winner-у от owner-кошелька.
 
 import * as http from 'http';
 import { TonClient, WalletContractV4, internal } from '@ton/ton';
@@ -30,7 +32,7 @@ async function readCollectionIndex(client: TonClient, address: Address): Promise
     return await contract.getGetCollectionData();
 }
 
-async function mint(artworkId: string): Promise<{ tokenId: string; collection: string; artworkId: string }> {
+async function mint(artworkId: string): Promise<{ tokenId: string; collection: string; artworkId: string; txHash?: string }> {
     const mnemonic = process.env.OWNER_MNEMONIC;
     if (!mnemonic) throw new Error('OWNER_MNEMONIC env is not set on minter service');
     const apiKey = process.env.TONCENTER_API_KEY;
@@ -77,11 +79,54 @@ async function mint(artworkId: string): Promise<{ tokenId: string; collection: s
         }
         if (indexAfter > indexBefore) {
             log('index after:', indexAfter.toString());
-            return { tokenId: indexAfter.toString(), collection: COLLECTION_ADDRESS, artworkId };
+            // Свежая транзакция на адресе коллекции — это и есть наш mint.
+            // Берём её hash, чтобы клиент мог открыть её в эксплорере.
+            let txHash: string | undefined;
+            try {
+                const txs = await client.getTransactions(collectionAddress, { limit: 1 });
+                txHash = txs[0]?.hash().toString('hex');
+                log('mint tx hash:', txHash);
+            } catch (e) {
+                log('failed to fetch tx hash:', (e as Error).message);
+            }
+            return { tokenId: indexAfter.toString(), collection: COLLECTION_ADDRESS, artworkId, txHash };
         }
     }
 
     throw new Error(`Timeout: контракт не инкрементил next_item_index за ${POLL_TIMEOUT_MS}ms`);
+}
+
+async function payout(address: string, amountTON: number): Promise<{ address: string; amountTON: number }> {
+    const mnemonic = process.env.OWNER_MNEMONIC;
+    if (!mnemonic) throw new Error('OWNER_MNEMONIC env is not set on minter service');
+    const apiKey = process.env.TONCENTER_API_KEY;
+    if (!Number.isFinite(amountTON) || amountTON <= 0) {
+        throw new Error('amountTON must be positive');
+    }
+
+    const endpoint = apiKey ? `${ENDPOINT}?api_key=${apiKey}` : ENDPOINT;
+    const client = new TonClient({ endpoint });
+    const key = await mnemonicToPrivateKey(mnemonic.trim().split(/\s+/));
+    const wallet = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey });
+    const ownerContract = client.open(wallet);
+    log('payout from owner →', address, amountTON, 'TON');
+
+    const dest = Address.parse(address);
+    const seqno = await ownerContract.getSeqno();
+    await ownerContract.sendTransfer({
+        seqno,
+        secretKey: key.secretKey,
+        messages: [
+            internal({
+                to: dest,
+                value: toNano(amountTON.toString()),
+                bounce: false,
+                body: beginCell().storeUint(0, 32).storeStringTail(`ArtSphere payout`).endCell(),
+            }),
+        ],
+    });
+    log('payout sent');
+    return { address, amountTON };
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
@@ -97,6 +142,53 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
+        return;
+    }
+
+    if (req.method === 'POST' && req.url === '/payout') {
+        try {
+            const raw = await readBody(req);
+            const { address, amountTON } = JSON.parse(raw || '{}');
+            if (!address || typeof address !== 'string' || typeof amountTON !== 'number') {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'address and amountTON are required' }));
+                return;
+            }
+            const result = await payout(address, amountTON);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+        } catch (e) {
+            log('payout failed:', e);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: (e as Error).message }));
+        }
+        return;
+    }
+
+    if (req.method === 'POST' && req.url === '/mint-batch') {
+        try {
+            const raw = await readBody(req);
+            const { artworkIds } = JSON.parse(raw || '{}');
+            if (!Array.isArray(artworkIds) || artworkIds.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'artworkIds array required' }));
+                return;
+            }
+            const results: Array<{ artworkId: string; tokenId: string; collection: string; txHash?: string; error?: string }> = [];
+            for (const id of artworkIds) {
+                try {
+                    const r = await mint(id);
+                    results.push({ ...r });
+                } catch (e) {
+                    results.push({ artworkId: id, tokenId: '', collection: COLLECTION_ADDRESS, error: (e as Error).message });
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ results }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: (e as Error).message }));
+        }
         return;
     }
 

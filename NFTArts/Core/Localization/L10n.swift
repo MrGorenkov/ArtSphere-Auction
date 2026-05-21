@@ -188,6 +188,8 @@ enum L10n {
 
     // MARK: - Showroom
     static var showroom: String { isRu ? "Шоурум" : "Showroom" }
+    static var shareMyShowroom: String { isRu ? "Поделиться моим шоурумом" : "Share my showroom" }
+    static var shareMyShowroomText: String { isRu ? "Смотри мой шоурум 👇" : "Check out my showroom 👇" }
     static var openShowroom: String { isRu ? "Открыть шоурум" : "Open Showroom" }
     static var showroomEmptyHint: String { isRu ? "Добавьте хотя бы одно произведение, чтобы открыть шоурум" : "Add at least one artwork to open the showroom" }
     static var showroomHintDrag: String { isRu ? "Перетаскивание — поворот" : "Drag to rotate" }
@@ -258,6 +260,7 @@ enum L10n {
     static var algorithmSobel: String { isRu ? "Собель (классика)" : "Sobel (classic)" }
     static var algorithmLaplacian: String { isRu ? "Лапласиан" : "Laplacian" }
     static var algorithmHybrid: String { isRu ? "Гибрид: нейросеть + Лапласиан" : "Hybrid: NN + Laplacian" }
+    static var algorithmPointCloud: String { isRu ? "Точечное облако (Splat)" : "Point Cloud (Splat)" }
     static var complexityHigh: String { isRu ? "Высокая" : "High" }
     static var complexityMid: String { isRu ? "Средняя" : "Mid" }
     static var complexityLow: String { isRu ? "Низкая" : "Low" }

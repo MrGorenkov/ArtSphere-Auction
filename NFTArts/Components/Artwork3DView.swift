@@ -79,18 +79,22 @@ struct Artwork3DView: UIViewRepresentable {
 
         // Store images in coordinator for overlay toggling
         coordinator.originalImage = sourceImage
-        coordinator.heatmapImage = NormalMapGenerator.generateComplexityHeatmap(from: sourceImage, cacheKey: cacheKey)
+        // Heatmap генерируется только когда юзер включит overlay — лениво,
+        // чтобы не блокировать первый показ сцены (генерация ~1-3 сек на iPhone 11 Pro).
+        Task.detached(priority: .utility) {
+            let heatmap = NormalMapGenerator.generateComplexityHeatmap(from: sourceImage, cacheKey: cacheKey)
+            await MainActor.run { coordinator.heatmapImage = heatmap }
+        }
 
         // Parent node for grouped animation
         let parentNode = SCNNode()
         parentNode.name = "artworkGroup"
         scene.rootNode.addChildNode(parentNode)
 
-        // Artwork plane with subdivision for depth effect
-        let planeGeometry = SCNPlane(width: 2.0, height: 2.0)
-        planeGeometry.cornerRadius = 0.05
-        planeGeometry.widthSegmentCount = 64
-        planeGeometry.heightSegmentCount = 64
+        // Geometry: для Hybrid строим настоящую 3D-мешу из depth-карты (вершины физически
+        // смещены — видно при любом ракурсе). Для Sobel/Laplacian остаётся быстрый
+        // SCNPlane с displacement (мгновенное открытие).
+        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage, cacheKey: cacheKey, algorithm: algorithm)
 
         let material = SCNMaterial()
         material.diffuse.contents = sourceImage
@@ -100,18 +104,68 @@ struct Artwork3DView: UIViewRepresentable {
         material.metalness.contents = 0.03
         material.lightingModel = .physicallyBased
         material.isDoubleSided = true
-        // Displacement mapping for physical brushstroke relief
-        let heightMap = NormalMapGenerator.generateHeightmap(from: sourceImage, cacheKey: cacheKey, algorithm: algorithm)
-        material.displacement.contents = heightMap
-        material.displacement.intensity = 0.015
-        planeGeometry.materials = [material]
 
-        let artworkNode = SCNNode(geometry: planeGeometry)
+        let artworkGeometry: SCNGeometry
+        if algorithm == .pointCloud {
+            let depth = DepthEstimator.shared.depthMap(for: sourceImage, cacheKey: cacheKey)
+            print("[3D] pointCloud build: depth=\(depth != nil ? "OK" : "nil")")
+            if let depth = depth,
+               let cloud = PointCloudBuilder.build(
+                   image: sourceImage, depthMap: depth,
+                   width: 2.0, height: 2.0, reliefScale: 0.28,
+                   resolution: 360, pointSize: 12, cacheKey: cacheKey
+               ) {
+                print("[3D] pointCloud OK")
+                artworkGeometry = cloud
+            } else {
+                print("[3D] pointCloud FAILED — fallback to plane")
+                let plane = SCNPlane(width: 2.0, height: 2.0)
+                plane.widthSegmentCount = 64; plane.heightSegmentCount = 64
+                plane.materials = [material]
+                artworkGeometry = plane
+            }
+        } else if algorithm == .hybrid,
+           let depth = DepthEstimator.shared.depthMap(for: sourceImage, cacheKey: cacheKey),
+           let mesh = DepthMesh.build(
+               depthMap: depth,
+               width: 2.0, height: 2.0,
+               reliefScale: 0.22,
+               resolution: 256,
+               cacheKey: cacheKey
+           ) {
+            print("[3D] hybrid mesh OK")
+            // PBR-усиление для Hybrid режима: тени в углублениях + per-pixel roughness
+            if let ao = PBRMapGenerator.generateAO(fromDepth: depth, cacheKey: cacheKey) {
+                material.ambientOcclusion.contents = ao
+                material.ambientOcclusion.intensity = 1.0
+            }
+            if let rough = PBRMapGenerator.generateRoughness(from: sourceImage, cacheKey: cacheKey) {
+                material.roughness.contents = rough
+            }
+            // Tessellated mesh — displacement не нужен, рельеф уже в вершинах
+            mesh.materials = [material]
+            artworkGeometry = mesh
+        } else {
+            if algorithm == .hybrid {
+                print("[3D] hybrid FAILED — depth or mesh nil, fallback to plane")
+            }
+            let planeGeometry = SCNPlane(width: 2.0, height: 2.0)
+            planeGeometry.cornerRadius = 0.05
+            planeGeometry.widthSegmentCount = 64
+            planeGeometry.heightSegmentCount = 64
+            material.displacement.contents = heightMap
+            material.displacement.intensity = 0.015
+            planeGeometry.materials = [material]
+            artworkGeometry = planeGeometry
+        }
+
+        let artworkNode = SCNNode(geometry: artworkGeometry)
         artworkNode.name = "artwork"
         parentNode.addChildNode(artworkNode)
 
-        // Store reference for material switching
+        // Store reference for material/geometry switching
         coordinator.artworkMaterial = material
+        coordinator.artworkNode = artworkNode
 
         // For URL-sourced artworks the placeholder may be a procedural fallback.
         // Upgrade to the real bytes in the background; swap on the main thread.
@@ -121,17 +175,46 @@ struct Artwork3DView: UIViewRepresentable {
             let activeAlgorithm = algorithm
             Task.detached(priority: .userInitiated) {
                 let loaded = await ImageLoader.loadImage(for: snapshot)
-                // Drop placeholder-derived maps so the next generate* runs against `loaded`.
+                // Drop placeholder-derived caches так чтобы Hybrid/Splat пересчитались с реального изображения.
                 NormalMapGenerator.invalidate(cacheKey: artId.uuidString)
+                DepthMesh.invalidate(cacheKey: artId.uuidString)
+                PointCloudBuilder.invalidate(cacheKey: artId.uuidString)
                 let newNormal = NormalMapGenerator.generate(from: loaded, cacheKey: artId.uuidString, algorithm: activeAlgorithm)
                 let newHeight = NormalMapGenerator.generateHeightmap(from: loaded, cacheKey: artId.uuidString, algorithm: activeAlgorithm)
                 let newHeatmap = NormalMapGenerator.generateComplexityHeatmap(from: loaded, cacheKey: artId.uuidString)
+
+                // Для Hybrid и Splat нужно пересчитать саму геометрию по реальной картинке
+                var rebuiltGeometry: SCNGeometry?
+                if activeAlgorithm == .hybrid,
+                   let depth = DepthEstimator.shared.depthMap(for: loaded, cacheKey: artId.uuidString),
+                   let mesh = DepthMesh.build(
+                       depthMap: depth, width: 2.0, height: 2.0,
+                       reliefScale: 0.22, resolution: 256, cacheKey: artId.uuidString) {
+                    mesh.materials = [material]
+                    rebuiltGeometry = mesh
+                } else if activeAlgorithm == .pointCloud,
+                   let depth = DepthEstimator.shared.depthMap(for: loaded, cacheKey: artId.uuidString),
+                   let cloud = PointCloudBuilder.build(
+                       image: loaded, depthMap: depth,
+                       width: 2.0, height: 2.0, reliefScale: 0.28,
+                       resolution: 360, pointSize: 12, cacheKey: artId.uuidString) {
+                    rebuiltGeometry = cloud
+                }
+
                 await MainActor.run {
                     coordinator.originalImage = loaded
                     coordinator.heatmapImage = newHeatmap
                     material.diffuse.contents = loaded
                     material.normal.contents = newNormal
-                    material.displacement.contents = newHeight
+                    if activeAlgorithm == .hybrid {
+                        material.displacement.contents = nil
+                        material.displacement.intensity = 0
+                    } else if activeAlgorithm != .pointCloud {
+                        material.displacement.contents = newHeight
+                    }
+                    if let g = rebuiltGeometry {
+                        coordinator.artworkNode?.geometry = g
+                    }
                 }
             }
         }
@@ -259,6 +342,7 @@ struct Artwork3DView: UIViewRepresentable {
 
     class Coordinator {
         weak var scene: SCNScene?
+        weak var artworkNode: SCNNode?
         var artworkMaterial: SCNMaterial?
         var originalImage: UIImage?
         var heatmapImage: UIImage?
@@ -266,21 +350,117 @@ struct Artwork3DView: UIViewRepresentable {
         private var isShowingOverlay = false
         var animationKeys: [String] = []
 
-        /// Regenerates normal + displacement maps for the new algorithm and swaps them
-        /// into the live material so the user can compare pipelines without reloading.
+        /// При смене алгоритма:
+        /// - Sobel/Laplacian: меняем только maps на плоскости (мгновенно)
+        /// - Hybrid: полностью пересоздаём геометрию из depth-карты (tessellated mesh)
+        ///   и подменяем у ноды — переход видно как реальное "выдвижение" рельефа.
         func applyAlgorithm(_ new: NormalMapGenerator.FilterAlgorithm, artwork: NFTArtwork) {
+            print("[3D] applyAlgorithm: prev=\(currentAlgorithm.rawValue) new=\(new.rawValue) material=\(artworkMaterial != nil) source=\(originalImage != nil) node=\(artworkNode != nil)")
             guard let material = artworkMaterial,
-                  let source = originalImage else { return }
+                  let source = originalImage,
+                  let node = artworkNode else { return }
+            let prev = currentAlgorithm
             currentAlgorithm = new
             let cacheKey = artwork.id.uuidString
-            // Compute off the main thread to keep the UI responsive (especially for
-            // hybrid mode where CoreML inference takes ~30-50 ms).
+
+            // СИНХРОННАЯ ВЕТКА для hybrid/pointCloud — нужна чтобы дебажить.
+            // Async Task.detached внизу обрабатывает Sobel.
+            if new == .hybrid {
+                print("[3D] hybrid SYNC start")
+                if let depth = DepthEstimator.shared.depthMap(for: source, cacheKey: cacheKey) {
+                    print("[3D] hybrid depth OK size=\(depth.size)")
+                    if let mesh = DepthMesh.build(depthMap: depth, width: 2.0, height: 2.0, reliefScale: 0.22, resolution: 128, cacheKey: cacheKey) {
+                        print("[3D] hybrid mesh OK — applying to node")
+                        material.displacement.contents = nil
+                        material.displacement.intensity = 0
+                        mesh.materials = [material]
+                        node.geometry = mesh
+                    } else {
+                        print("[3D] hybrid mesh BUILD FAILED")
+                    }
+                } else {
+                    print("[3D] hybrid depth NIL")
+                }
+                return
+            }
+            if new == .pointCloud {
+                print("[3D] pointCloud SYNC start")
+                if let depth = DepthEstimator.shared.depthMap(for: source, cacheKey: cacheKey),
+                   let cloud = PointCloudBuilder.build(image: source, depthMap: depth, width: 2.0, height: 2.0, reliefScale: 0.28, resolution: 200, pointSize: 12, cacheKey: cacheKey) {
+                    print("[3D] pointCloud OK — applying to node")
+                    node.geometry = cloud
+                } else {
+                    print("[3D] pointCloud BUILD FAILED")
+                }
+                return
+            }
+
             Task.detached(priority: .userInitiated) {
+                print("[3D] Task started")
                 let normalMap = NormalMapGenerator.generate(from: source, cacheKey: cacheKey, algorithm: new)
+                print("[3D] normalMap done")
                 let heightMap = NormalMapGenerator.generateHeightmap(from: source, cacheKey: cacheKey, algorithm: new)
+                print("[3D] heightMap done, entering switch, new=\(new.rawValue) prev=\(prev.rawValue)")
+
+                // Геометрия меняется по типу алгоритма: plane (Sobel/Laplacian),
+                // tessellated mesh (Hybrid), point cloud (Splat).
+                var newGeometry: SCNGeometry?
+                if new != prev {
+                    switch new {
+                    case .hybrid:
+                        let depth = DepthEstimator.shared.depthMap(for: source, cacheKey: cacheKey)
+                        print("[3D] hybrid: depth=\(depth != nil ? "OK" : "NIL")")
+                        if let depth = depth,
+                           let mesh = DepthMesh.build(
+                               depthMap: depth, width: 2.0, height: 2.0,
+                               reliefScale: 0.22, resolution: 256, cacheKey: cacheKey) {
+                            print("[3D] hybrid mesh: vertices count built")
+                            if let ao = PBRMapGenerator.generateAO(fromDepth: depth, cacheKey: cacheKey) {
+                                material.ambientOcclusion.contents = ao
+                                material.ambientOcclusion.intensity = 1.0
+                            }
+                            if let rough = PBRMapGenerator.generateRoughness(from: source, cacheKey: cacheKey) {
+                                material.roughness.contents = rough
+                            }
+                            mesh.materials = [material]
+                            newGeometry = mesh
+                        }
+                    case .pointCloud:
+                        let depth = DepthEstimator.shared.depthMap(for: source, cacheKey: cacheKey)
+                        print("[3D] pointCloud: depth=\(depth != nil ? "OK" : "NIL")")
+                        if let depth = depth,
+                           let cloud = PointCloudBuilder.build(
+                               image: source, depthMap: depth,
+                               width: 2.0, height: 2.0, reliefScale: 0.28,
+                               resolution: 360, pointSize: 12, cacheKey: cacheKey) {
+                            print("[3D] pointCloud built")
+                            newGeometry = cloud
+                        }
+                    case .sobel:
+                        let plane = SCNPlane(width: 2.0, height: 2.0)
+                        plane.cornerRadius = 0.05
+                        plane.widthSegmentCount = 64
+                        plane.heightSegmentCount = 64
+                        material.ambientOcclusion.contents = nil
+                        material.roughness.contents = 0.45
+                        plane.materials = [material]
+                        newGeometry = plane
+                    }
+                }
+
                 await MainActor.run {
                     material.normal.contents = normalMap
-                    material.displacement.contents = heightMap
+                    if new == .hybrid {
+                        // Mesh сам несёт рельеф — displacement выключаем чтобы не было двойного эффекта
+                        material.displacement.contents = nil
+                        material.displacement.intensity = 0.0
+                    } else {
+                        material.displacement.contents = heightMap
+                        material.displacement.intensity = 0.015
+                    }
+                    if let g = newGeometry {
+                        node.geometry = g
+                    }
                 }
             }
         }

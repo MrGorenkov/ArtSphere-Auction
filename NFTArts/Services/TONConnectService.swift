@@ -73,7 +73,10 @@ final class TONConnectService: ObservableObject {
         walletAddress = trimmed
         defaults.set(trimmed, forKey: addressKey)
         startBalancePolling()
-        Task { await refreshBalance() }
+        Task {
+            await refreshBalance()
+            await syncAddressToBackend(trimmed)
+        }
         return true
     }
 
@@ -84,6 +87,22 @@ final class TONConnectService: ObservableObject {
         balanceTON = nil
         lastError = nil
         defaults.removeObject(forKey: addressKey)
+        Task { await syncAddressToBackend(nil) }
+    }
+
+    /// Сохраняет (или сбрасывает) TON-адрес в backend — нужен для payout при выигрыше.
+    private func syncAddressToBackend(_ address: String?) async {
+        struct Body: Encodable { let tonWalletAddress: String? }
+        do {
+            try await NetworkService.shared.requestVoid(
+                endpoint: "users/me/ton-wallet",
+                method: .put,
+                body: Body(tonWalletAddress: address)
+            )
+        } catch {
+            // Не критично — payout не сработает, но локальный balance polling продолжится.
+            print("syncAddressToBackend failed: \(error)")
+        }
     }
 
     /// Адрес задеплоенной NFT-коллекции в TON Testnet (Tact-контракт ArtSphereCollection).

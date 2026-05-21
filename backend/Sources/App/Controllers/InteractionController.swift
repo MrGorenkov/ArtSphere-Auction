@@ -21,6 +21,61 @@ struct InteractionController: RouteCollection {
         follows.post(":userId", "follow", use: toggleFollow)
         follows.get("me", "following", use: getFollowing)
         follows.get("me", "followers", use: getFollowers)
+        // То же самое, но для любого юзера (UserProfileView)
+        follows.get(":userId", "following", use: getFollowingOf)
+        follows.get(":userId", "followers", use: getFollowersOf)
+    }
+
+    // GET /api/v1/users/:userId/following
+    func getFollowingOf(req: Request) async throws -> [UserDTO] {
+        guard let userId = req.parameters.get("userId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid user ID")
+        }
+        return try await loadFollowing(of: userId, on: req.db)
+    }
+
+    // GET /api/v1/users/:userId/followers
+    func getFollowersOf(req: Request) async throws -> [UserDTO] {
+        guard let userId = req.parameters.get("userId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid user ID")
+        }
+        return try await loadFollowers(of: userId, on: req.db)
+    }
+
+    private func loadFollowing(of userId: UUID, on db: Database) async throws -> [UserDTO] {
+        let rows = try await (db as! SQLDatabase).raw("""
+            SELECT u.id, u.username, u.display_name, u.wallet_address, u.bio, u.balance, u.avatar_url
+            FROM users u
+            INNER JOIN follows f ON f.following_id = u.id
+            WHERE f.follower_id = \(bind: userId)
+            ORDER BY f.created_at DESC
+        """).all()
+        return try mapUserRows(rows)
+    }
+
+    private func loadFollowers(of userId: UUID, on db: Database) async throws -> [UserDTO] {
+        let rows = try await (db as! SQLDatabase).raw("""
+            SELECT u.id, u.username, u.display_name, u.wallet_address, u.bio, u.balance, u.avatar_url
+            FROM users u
+            INNER JOIN follows f ON f.follower_id = u.id
+            WHERE f.following_id = \(bind: userId)
+            ORDER BY f.created_at DESC
+        """).all()
+        return try mapUserRows(rows)
+    }
+
+    private func mapUserRows(_ rows: [SQLRow]) throws -> [UserDTO] {
+        try rows.map { row in
+            UserDTO(
+                id: try row.decode(column: "id", as: UUID.self).uuidString,
+                username: try row.decode(column: "username", as: String.self),
+                displayName: try row.decode(column: "display_name", as: String.self),
+                walletAddress: try row.decode(column: "wallet_address", as: String.self),
+                bio: try? row.decode(column: "bio", as: String.self),
+                balance: try row.decode(column: "balance", as: Double.self),
+                avatarUrl: try? row.decode(column: "avatar_url", as: String.self)
+            )
+        }
     }
 
     // MARK: - Comments

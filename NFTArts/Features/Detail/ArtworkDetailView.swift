@@ -271,8 +271,8 @@ struct ArtworkDetailView: View {
         Menu {
             Picker(L10n.algorithmPicker, selection: $algorithm) {
                 Text(L10n.algorithmSobel).tag(NormalMapGenerator.FilterAlgorithm.sobel)
-                Text(L10n.algorithmLaplacian).tag(NormalMapGenerator.FilterAlgorithm.laplacian)
                 Text(L10n.algorithmHybrid).tag(NormalMapGenerator.FilterAlgorithm.hybrid)
+                Text(L10n.algorithmPointCloud).tag(NormalMapGenerator.FilterAlgorithm.pointCloud)
             }
         } label: {
             HStack(spacing: 6) {
@@ -346,7 +346,7 @@ struct ArtworkDetailView: View {
                         .font(NFTTypography.title)
 
                     if let creatorId = auction.creatorId {
-                        NavigationLink(destination: UserProfileView(userId: creatorId, userName: auction.artwork.artistName, avatarUrl: nil)) {
+                        NavigationLink(destination: UserProfileView(userId: creatorId, userName: auction.artwork.artistName, avatarUrl: nil).environmentObject(auctionService)) {
                             HStack(spacing: 8) {
                                 Image(systemName: "person.circle.fill")
                                     .foregroundStyle(.nftPurple)
@@ -590,7 +590,37 @@ struct ArtworkDetailView: View {
             InfoRow(icon: "person.fill", title: L10n.artist, value: auction.artwork.artistName)
             InfoRow(icon: "calendar", title: L10n.created, value: auction.artwork.createdAt.formatted(date: .abbreviated, time: .omitted))
             InfoRow(icon: "tag.fill", title: L10n.category, value: L10n.categoryName(auction.artwork.category))
-            InfoRow(icon: "cube.fill", title: L10n.tokenId, value: auction.artwork.tokenId ?? "N/A")
+            // On-chain token: либо реальный ID + ссылка на эксплорер, либо "minting…"
+            if let tokenId = auction.artwork.tokenId, let contract = auction.artwork.contractAddress {
+                Button {
+                    // Если minter дал hash mint-транзакции — открываем её напрямую,
+                    // иначе fallback на адрес коллекции (вкладка Transactions в эксплорере).
+                    let target = auction.artwork.explorerUrl ?? "https://testnet.tonviewer.com/\(contract)"
+                    if let url = URL(string: target) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "cube.fill")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 22)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tokenId)
+                                .font(NFTTypography.caption)
+                                .foregroundStyle(.secondary)
+                            Text("#\(tokenId) · TON Testnet")
+                                .font(NFTTypography.subheadline)
+                                .foregroundStyle(.primary)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right.square")
+                            .foregroundStyle(.blue)
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                InfoRow(icon: "cube.fill", title: L10n.tokenId, value: "—")
+            }
             InfoRow(icon: "link", title: L10n.blockchain, value: auction.artwork.blockchain.rawValue)
             if !auction.isReserveMet {
                 InfoRow(icon: "exclamationmark.triangle", title: L10n.reservePrice, value: L10n.reserveNotMet)
@@ -618,7 +648,7 @@ struct ArtworkDetailView: View {
                 .padding(.bottom, 4)
 
                 ForEach(auction.bids.sorted(by: { $0.timestamp > $1.timestamp })) { bid in
-                    NavigationLink(destination: UserProfileView(userId: bid.userId, userName: bid.userName, avatarUrl: nil)) {
+                    NavigationLink(destination: UserProfileView(userId: bid.userId, userName: bid.userName, avatarUrl: nil).environmentObject(auctionService)) {
                         HStack {
                             Circle()
                                 .fill(bid.userId == auctionService.currentUser.id ? Color.nftPurple : Color(.tertiarySystemFill))

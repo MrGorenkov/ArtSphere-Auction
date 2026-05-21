@@ -14,6 +14,7 @@ struct AdminController: RouteCollection {
         admin.delete("artworks", ":artworkId", use: deleteArtwork)
         admin.get("auctions", use: listAuctions)
         admin.put("auctions", ":auctionId", "cancel", use: cancelAuction)
+        admin.put("auctions", ":auctionId", "finalize", use: finalizeAuction)
         admin.get("auctions", ":auctionId", "bids", use: auctionBids)
         admin.delete("auctions", ":auctionId", use: deleteAuction)
         admin.get("stats", "timeseries", use: timeseriesStats)
@@ -290,7 +291,18 @@ struct AdminController: RouteCollection {
             throw Abort(.badRequest, reason: "Can only cancel active or upcoming auctions")
         }
 
-        auction.status = "ended"
+        // Возврат активного эскроу: текущий high-bidder получает свою ставку обратно.
+        // На любой момент в эскроу держится только ставка лидера (см. BidController).
+        if let highBid = try await BidModel.query(on: req.db)
+            .filter(\.$auction.$id == auctionId)
+            .sort(\.$amount, .descending)
+            .with(\.$user)
+            .first() {
+            highBid.user.balance += highBid.amount
+            try await highBid.user.save(on: req.db)
+        }
+
+        auction.status = "cancelled"
         try await auction.save(on: req.db)
 
         let db = req.db as! SQLDatabase
@@ -314,6 +326,92 @@ struct AdminController: RouteCollection {
             winnerName: nil,
             createdAt: auction.createdAt?.iso8601String ?? ""
         )
+    }
+
+    // PUT /api/v1/admin/auctions/:auctionId/finalize
+    // Завершает аукцион: переводит эскроу winner-а seller-у (внутренний balance),
+    // если у winner подключён Tonkeeper — дополнительно шлёт реальный testnet TON
+    // на его адрес через minter-сервис, и помечает аукцион как sold.
+    func finalizeAuction(req: Request) async throws -> AdminAuctionDTO {
+        guard let auctionId = req.parameters.get("auctionId", as: UUID.self) else {
+            throw Abort(.badRequest, reason: "Invalid auction ID")
+        }
+        guard let auction = try await AuctionModel.find(auctionId, on: req.db) else {
+            throw Abort(.notFound, reason: "Auction not found")
+        }
+        guard auction.status == "active" else {
+            throw Abort(.badRequest, reason: "Can only finalize active auctions")
+        }
+
+        let topBid = try await BidModel.query(on: req.db)
+            .filter(\.$auction.$id == auctionId)
+            .sort(\.$amount, .descending)
+            .with(\.$user)
+            .first()
+
+        // Артворк → seller (creator)
+        let artwork = try await ArtworkModel.find(auction.$artwork.id, on: req.db)
+        let sellerId = artwork?.$creator.id
+
+        if let bid = topBid {
+            // Winner: эскроу не возвращаем (он "купил" NFT).
+            // Seller: получает выплату + 5% creator royalty (см. RewardsEngine).
+            if let sellerId, sellerId != bid.$user.id,
+               let seller = try await UserModel.find(sellerId, on: req.db) {
+                seller.balance += bid.amount
+                try await seller.save(on: req.db)
+                _ = try await RewardsEngine.onSaleRoyalty(seller: seller, winningBid: bid.amount, on: req.db)
+            }
+
+            // Реальный testnet TON-перевод winner-у (если он подключил Tonkeeper).
+            if let winnerWallet = bid.user.tonWalletAddress, !winnerWallet.isEmpty {
+                _ = try? await callMinterPayout(address: winnerWallet, amountTON: bid.amount, client: req.client, logger: req.logger)
+            }
+
+            auction.status = "sold"
+        } else {
+            // Без ставок — просто закрываем
+            auction.status = "ended"
+        }
+        try await auction.save(on: req.db)
+
+        let db = req.db as! SQLDatabase
+        let artworkRow = try await db.raw("SELECT title, image_url FROM artworks WHERE id = \(bind: auction.$artwork.id)").first()
+        let artworkTitle = try artworkRow?.decode(column: "title", as: String.self) ?? "Unknown"
+        let artworkImageUrl = try? artworkRow?.decode(column: "image_url", as: String.self)
+
+        return AdminAuctionDTO(
+            id: auction.id?.uuidString ?? "",
+            artworkTitle: artworkTitle,
+            artworkImageUrl: artworkImageUrl,
+            startingPrice: auction.startingPrice,
+            currentBid: auction.currentBid,
+            reservePrice: auction.reservePrice,
+            bidStep: auction.bidStep,
+            startTime: auction.startTime.iso8601String,
+            endTime: auction.endTime.iso8601String,
+            status: auction.status,
+            bidCount: auction.bidCount,
+            creatorName: nil,
+            winnerName: topBid?.user.displayName,
+            createdAt: auction.createdAt?.iso8601String ?? ""
+        )
+    }
+
+    private struct PayoutRequest: Content { let address: String; let amountTON: Double }
+    private struct PayoutResponse: Content { let txLt: String?; let address: String; let amountTON: Double }
+
+    private func callMinterPayout(address: String, amountTON: Double, client: Client, logger: Logger) async throws -> PayoutResponse {
+        let baseUrl = Environment.get("MINTER_URL") ?? "http://minter:3001"
+        let uri = URI(string: "\(baseUrl)/payout")
+        let response = try await client.post(uri) { req in
+            try req.content.encode(PayoutRequest(address: address, amountTON: amountTON))
+        }
+        guard response.status == .ok else {
+            logger.error("minter payout failed: \(response.status)")
+            throw Abort(.internalServerError, reason: "Payout failed")
+        }
+        return try response.content.decode(PayoutResponse.self)
     }
 
     // GET /api/v1/admin/auctions/:auctionId/bids

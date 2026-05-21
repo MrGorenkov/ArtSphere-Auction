@@ -22,7 +22,7 @@ final class NFTTokenModel: Model, Content, @unchecked Sendable {
         ownerId: UUID,
         contractAddress: String,
         tokenIdOnChain: String? = nil,
-        blockchain: String = "Polygon",
+        blockchain: String = "TON",
         status: String = "minted",
         metadataUri: String? = nil
     ) {

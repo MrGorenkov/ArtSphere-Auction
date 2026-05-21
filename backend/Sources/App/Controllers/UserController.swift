@@ -6,12 +6,31 @@ struct UserController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         let users = routes.grouped("users")
         users.get("me", use: profile)
+        users.get("me", "progress", use: progress)
+        users.post("me", "claim-daily", use: claimDaily)
         users.get("me", "stats", use: stats)
         users.get("me", "notifications", use: notifications)
         users.put("me", use: updateProfile)
+        users.put("me", "ton-wallet", use: setTonWallet)
         users.on(.POST, "me", "avatar", body: .collect(maxSize: "5mb"), use: uploadAvatar)
         users.post("me", "device-token", use: registerDeviceToken)
         users.get("search", use: searchUsers)
+    }
+
+    // PUT /api/v1/users/me/ton-wallet
+    // iOS вызывает после успешного подключения Tonkeeper, чтобы backend мог
+    // сделать payout на этот адрес при выигрыше аукциона.
+    func setTonWallet(req: Request) async throws -> UserDTO {
+        struct Body: Content { let tonWalletAddress: String? }
+        let userId = try req.auth.require(UUID.self)
+        let body = try req.content.decode(Body.self)
+
+        guard let user = try await UserModel.find(userId, on: req.db) else {
+            throw Abort(.notFound, reason: "User not found")
+        }
+        user.tonWalletAddress = body.tonWalletAddress
+        try await user.save(on: req.db)
+        return user.toDTO()
     }
 
     // GET /api/v1/users/me
@@ -178,6 +197,63 @@ struct UserController: RouteCollection {
             )
         }
     }
+
+    // MARK: - Rewards endpoints
+
+    /// GET /api/v1/users/me/progress — состояние buyer/creator-наград для UI.
+    func progress(req: Request) async throws -> UserProgressDTO {
+        let userId = try req.auth.require(UUID.self)
+        guard let user = try await UserModel.find(userId, on: req.db) else {
+            throw Abort(.notFound, reason: "User not found")
+        }
+        let level = RewardsEngine.UserLevel.from(volume: user.totalVolumeTraded)
+        let next = level.next
+        let dailyAvailable: Bool = {
+            guard let last = user.lastDailyClaim else { return true }
+            return !Calendar(identifier: .gregorian).isDate(last, inSameDayAs: Date())
+        }()
+        // Следующий creator-milestone
+        let milestones = [5, 15, 30]
+        let nextMilestone = milestones.first { $0 > user.totalMints }
+        return UserProgressDTO(
+            balance: user.balance,
+            totalVolumeTraded: user.totalVolumeTraded,
+            totalMints: user.totalMints,
+            level: level.rawValue,
+            cashbackPct: level.cashbackPct,
+            nextLevel: next?.rawValue,
+            nextLevelAt: next?.threshold,
+            nextLevelReward: next?.rewardOnReach,
+            nextMilestone: nextMilestone,
+            dailyAvailable: dailyAvailable
+        )
+    }
+
+    /// POST /api/v1/users/me/claim-daily — +5 TON, если ещё не клеймил сегодня.
+    func claimDaily(req: Request) async throws -> UserProgressDTO {
+        let userId = try req.auth.require(UUID.self)
+        guard let user = try await UserModel.find(userId, on: req.db) else {
+            throw Abort(.notFound, reason: "User not found")
+        }
+        let claimed = try await RewardsEngine.tryClaimDaily(user: user, on: req.db)
+        if !claimed {
+            throw Abort(.tooManyRequests, reason: "Daily bonus already claimed today")
+        }
+        return try await progress(req: req)
+    }
+}
+
+struct UserProgressDTO: Content {
+    let balance: Double
+    let totalVolumeTraded: Double
+    let totalMints: Int
+    let level: String              // bronze/silver/gold/diamond/legend
+    let cashbackPct: Double        // 0..0.05
+    let nextLevel: String?
+    let nextLevelAt: Double?       // объём до следующего уровня
+    let nextLevelReward: Double?   // one-time bonus за достижение
+    let nextMilestone: Int?        // следующий creator-milestone (5/15/30)
+    let dailyAvailable: Bool
 }
 
 struct UserStatsDTO: Content {

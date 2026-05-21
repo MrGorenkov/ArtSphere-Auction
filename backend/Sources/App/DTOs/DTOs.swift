@@ -25,6 +25,12 @@ struct ArtworkDTO: Content {
     let styleName: String?
     let blockchain: String
     let createdAt: String
+    // On-chain metadata (LEFT JOIN nft_tokens). nil если NFT ещё не сминтнут.
+    let tokenIdOnChain: String?
+    let contractAddress: String?
+    /// Прямая ссылка на mint-транзакцию в эксплорере (если у минтера получилось взять hash),
+    /// иначе ссылка на адрес коллекции.
+    let explorerUrl: String?
 }
 
 struct AuctionDTO: Content {
@@ -199,6 +205,19 @@ struct CollectionArtworkRequest: Content {
 struct MintNFTRequest: Content {
     let artworkId: String
     let blockchain: String?
+}
+
+// Запрос/ответ для offline-синхронизации ставок (BidController.syncBids).
+// Клиент копит ставки в очереди когда нет связи, потом шлёт пачкой.
+struct SyncBidInput: Content {
+    let id: String        // клиентский идентификатор ставки (для идемпотентности)
+    let auctionId: String
+    let amount: Double
+}
+
+struct SyncBidResponse: Content {
+    let synced: [String]  // id ставок, которые успешно применены
+    let failed: [String]  // id отвергнутых (просрочка, недостаточный balance, etc.)
 }
 
 // MARK: - WebSocket Messages

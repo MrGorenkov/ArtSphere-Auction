@@ -33,10 +33,13 @@ enum ShowroomSceneBuilder {
         addWalls(to: scene, palette: palette)
         addPaintings(to: scene, artworks: Array(artworks.prefix(12)), palette: palette)
         addLighting(to: scene, palette: palette)
-        if palette.showLouvreDecor {
-            addDecor(to: scene, palette: palette)
-        } else {
-            addRug(to: scene, palette: palette)
+        // Декор зависит от темы: каждой свой набор.
+        addRug(to: scene, palette: palette)
+        switch theme {
+        case .louvre:    addLouvreDecor(to: scene)
+        case .modern:    addModernDecor(to: scene, palette: palette)
+        case .loft:      addLoftDecor(to: scene, palette: palette)
+        case .cyberpunk: addCyberpunkDecor(to: scene, palette: palette)
         }
         addCamera(to: scene)
 
@@ -354,12 +357,51 @@ enum ShowroomSceneBuilder {
         scene.rootNode.addChildNode(centre)
     }
 
+    // MARK: - Lighting modifier (поверх палитры темы)
+
+    /// Применяет к существующей сцене модификатор освещения, не меняя палитру/декор.
+    /// Используется при тапе на кнопку лампочки в шоуруме.
+    static func applyLighting(_ mode: ShowroomView.LightingMode, themePalette: ShowroomTheme.Palette, to scene: SCNScene) {
+        let ambientMult: CGFloat
+        let fillMult: CGFloat
+        let pictureMult: CGFloat
+        let bg: UIColor
+
+        switch mode {
+        case .gallery:
+            ambientMult = 1.0; fillMult = 1.0; pictureMult = 1.0
+            bg = themePalette.background
+        case .day:
+            ambientMult = 2.2; fillMult = 1.8; pictureMult = 0.6
+            bg = UIColor(red: 0.86, green: 0.91, blue: 0.96, alpha: 1.0)
+        case .night:
+            ambientMult = 0.25; fillMult = 0.3; pictureMult = 2.8
+            bg = UIColor(red: 0.02, green: 0.03, blue: 0.06, alpha: 1.0)
+        }
+
+        SCNTransaction.begin()
+        SCNTransaction.animationDuration = 0.4
+        scene.background.contents = bg
+        scene.rootNode.enumerateChildNodes { node, _ in
+            guard let name = node.name else { return }
+            switch name {
+            case "showroom_ambient":
+                node.light?.intensity = themePalette.ambientIntensity * ambientMult
+            case "showroom_fill", "showroom_centre":
+                node.light?.intensity = themePalette.fillIntensity * fillMult
+            case "showroom_picture_light":
+                node.light?.intensity = themePalette.pictureIntensity * pictureMult
+            default: break
+            }
+        }
+        SCNTransaction.commit()
+    }
+
     // MARK: - Decor
 
     /// Adds gallery furnishings: a central runner rug, two viewing benches, four corner
     /// pedestals with marble vases, and a multi-bulb chandelier hanging from the ceiling.
-    private static func addDecor(to scene: SCNScene, palette: ShowroomTheme.Palette) {
-        addRug(to: scene, palette: palette)
+    private static func addLouvreDecor(to scene: SCNScene) {
         addBench(to: scene, position: SCNVector3(-1.6, 0.0, 0))
         addBench(to: scene, position: SCNVector3( 1.6, 0.0, 0))
         addPedestal(to: scene, position: SCNVector3(-4.6, 0.0, -4.6))
@@ -367,6 +409,226 @@ enum ShowroomSceneBuilder {
         addPedestal(to: scene, position: SCNVector3(-4.6, 0.0,  4.6))
         addPedestal(to: scene, position: SCNVector3( 4.6, 0.0,  4.6))
         addChandelier(to: scene)
+    }
+
+    // MARK: - Modern decor (минимализм: куб-postaments + abstract sculptures)
+    private static func addModernDecor(to scene: SCNScene, palette: ShowroomTheme.Palette) {
+        // Низкие квадратные постаменты с абстрактными скульптурами
+        let positions: [SCNVector3] = [
+            SCNVector3(-4.5, 0, -4.5), SCNVector3(4.5, 0, -4.5),
+            SCNVector3(-4.5, 0,  4.5), SCNVector3(4.5, 0,  4.5)
+        ]
+        for (i, pos) in positions.enumerated() {
+            addMinimalistPedestal(to: scene, position: pos, sculptureType: i % 3)
+        }
+        // Длинная белая скамья в центре
+        addModernBench(to: scene, position: SCNVector3(0, 0, 0))
+    }
+
+    private static func addMinimalistPedestal(to scene: SCNScene, position: SCNVector3, sculptureType: Int) {
+        let mat = SCNMaterial()
+        mat.diffuse.contents = UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
+        mat.roughness.contents = 0.4
+        mat.metalness.contents = 0.05
+        mat.lightingModel = .physicallyBased
+
+        let pedestal = SCNBox(width: 0.5, height: 0.6, length: 0.5, chamferRadius: 0.0)
+        pedestal.materials = [mat]
+        let pNode = SCNNode(geometry: pedestal)
+        pNode.position = SCNVector3(position.x, 0.3, position.z)
+        scene.rootNode.addChildNode(pNode)
+
+        // Абстрактная скульптура — варьируется по типу
+        let sculpMat = SCNMaterial()
+        sculpMat.diffuse.contents = UIColor(red: 0.15, green: 0.15, blue: 0.17, alpha: 1.0)
+        sculpMat.metalness.contents = 0.7
+        sculpMat.roughness.contents = 0.2
+        sculpMat.lightingModel = .physicallyBased
+
+        let sculpture: SCNGeometry
+        switch sculptureType {
+        case 0: sculpture = SCNTorus(ringRadius: 0.18, pipeRadius: 0.05)
+        case 1: sculpture = SCNSphere(radius: 0.16)
+        default: sculpture = SCNCone(topRadius: 0.0, bottomRadius: 0.15, height: 0.35)
+        }
+        sculpture.materials = [sculpMat]
+        let sNode = SCNNode(geometry: sculpture)
+        sNode.position = SCNVector3(position.x, 0.75, position.z)
+        if sculptureType == 0 { sNode.eulerAngles.x = .pi / 2 }
+        scene.rootNode.addChildNode(sNode)
+    }
+
+    private static func addModernBench(to scene: SCNScene, position: SCNVector3) {
+        let mat = SCNMaterial()
+        mat.diffuse.contents = UIColor(red: 0.92, green: 0.92, blue: 0.93, alpha: 1.0)
+        mat.roughness.contents = 0.5
+        mat.lightingModel = .physicallyBased
+
+        let bench = SCNBox(width: 2.4, height: 0.35, length: 0.5, chamferRadius: 0.02)
+        bench.materials = [mat]
+        let node = SCNNode(geometry: bench)
+        node.position = SCNVector3(position.x, 0.18, position.z)
+        scene.rootNode.addChildNode(node)
+    }
+
+    // MARK: - Loft decor (индастриал: эдисон-лампы на проводах, низкие диваны, ящики)
+    private static func addLoftDecor(to scene: SCNScene, palette: ShowroomTheme.Palette) {
+        // Висящие Эдисон-лампочки
+        addEdisonBulb(to: scene, position: SCNVector3(-2.5, 0, -2.5))
+        addEdisonBulb(to: scene, position: SCNVector3( 2.5, 0, -2.5))
+        addEdisonBulb(to: scene, position: SCNVector3(-2.5, 0,  2.5))
+        addEdisonBulb(to: scene, position: SCNVector3( 2.5, 0,  2.5))
+        // Низкие кожаные диванчики
+        addLeatherCouch(to: scene, position: SCNVector3(-1.8, 0, 0))
+        addLeatherCouch(to: scene, position: SCNVector3( 1.8, 0, 0))
+        // Деревянные ящики в углах
+        addCrate(to: scene, position: SCNVector3(-4.6, 0, -4.6))
+        addCrate(to: scene, position: SCNVector3( 4.6, 0,  4.6))
+    }
+
+    private static func addEdisonBulb(to scene: SCNScene, position: SCNVector3) {
+        // Длинный шнур от потолка
+        let cordMat = SCNMaterial()
+        cordMat.diffuse.contents = UIColor(red: 0.1, green: 0.08, blue: 0.06, alpha: 1.0)
+        cordMat.lightingModel = .lambert
+        let cord = SCNCylinder(radius: 0.008, height: 2.0)
+        cord.materials = [cordMat]
+        let cordNode = SCNNode(geometry: cord)
+        cordNode.position = SCNVector3(position.x, 3.4, position.z)
+        scene.rootNode.addChildNode(cordNode)
+
+        // Лампочка
+        let bulbMat = SCNMaterial()
+        bulbMat.diffuse.contents = UIColor(red: 1.0, green: 0.85, blue: 0.5, alpha: 1.0)
+        bulbMat.emission.contents = UIColor(red: 1.0, green: 0.75, blue: 0.4, alpha: 1.0)
+        bulbMat.lightingModel = .lambert
+        let bulb = SCNSphere(radius: 0.09)
+        bulb.materials = [bulbMat]
+        let bulbNode = SCNNode(geometry: bulb)
+        bulbNode.position = SCNVector3(position.x, 2.35, position.z)
+        scene.rootNode.addChildNode(bulbNode)
+
+        // Точечный свет рядом — тёплая лампа накаливания
+        let lightNode = SCNNode()
+        lightNode.name = "showroom_picture_light" // совместимо с applyLighting
+        lightNode.light = SCNLight()
+        lightNode.light?.type = .omni
+        lightNode.light?.intensity = 90
+        lightNode.light?.color = UIColor(red: 1.0, green: 0.75, blue: 0.4, alpha: 1.0)
+        lightNode.light?.attenuationStartDistance = 0.5
+        lightNode.light?.attenuationEndDistance = 4
+        lightNode.position = SCNVector3(position.x, 2.3, position.z)
+        scene.rootNode.addChildNode(lightNode)
+    }
+
+    private static func addLeatherCouch(to scene: SCNScene, position: SCNVector3) {
+        let leather = SCNMaterial()
+        leather.diffuse.contents = UIColor(red: 0.35, green: 0.22, blue: 0.15, alpha: 1.0)
+        leather.roughness.contents = 0.55
+        leather.metalness.contents = 0.05
+        leather.lightingModel = .physicallyBased
+        // Сиденье
+        let seat = SCNBox(width: 0.55, height: 0.45, length: 1.4, chamferRadius: 0.06)
+        seat.materials = [leather]
+        let seatNode = SCNNode(geometry: seat)
+        seatNode.position = SCNVector3(position.x, 0.22, position.z)
+        scene.rootNode.addChildNode(seatNode)
+        // Спинка
+        let back = SCNBox(width: 0.2, height: 0.55, length: 1.4, chamferRadius: 0.04)
+        back.materials = [leather]
+        let backNode = SCNNode(geometry: back)
+        let backOffset: Float = position.x < 0 ? -0.22 : 0.22
+        backNode.position = SCNVector3(position.x + backOffset, 0.5, position.z)
+        scene.rootNode.addChildNode(backNode)
+    }
+
+    private static func addCrate(to scene: SCNScene, position: SCNVector3) {
+        let wood = SCNMaterial()
+        wood.diffuse.contents = UIColor(red: 0.30, green: 0.20, blue: 0.12, alpha: 1.0)
+        wood.roughness.contents = 0.85
+        wood.lightingModel = .physicallyBased
+        let box = SCNBox(width: 0.55, height: 0.55, length: 0.55, chamferRadius: 0.01)
+        box.materials = [wood]
+        let node = SCNNode(geometry: box)
+        node.position = SCNVector3(position.x, 0.275, position.z)
+        scene.rootNode.addChildNode(node)
+    }
+
+    // MARK: - Cyberpunk decor (неон-трубы, голограммы, металл-постаменты)
+    private static func addCyberpunkDecor(to scene: SCNScene, palette: ShowroomTheme.Palette) {
+        // Неоновые полосы вдоль низа стен
+        addNeonStrip(to: scene, color: UIColor(red: 0.85, green: 0.10, blue: 0.55, alpha: 1.0))
+        // Голограммы — emissive кубики на тонких подставках
+        addHologram(to: scene, position: SCNVector3(-4.0, 0, -4.0), color: UIColor(red: 0.30, green: 0.85, blue: 1.0, alpha: 1.0))
+        addHologram(to: scene, position: SCNVector3( 4.0, 0, -4.0), color: UIColor(red: 0.85, green: 0.10, blue: 0.55, alpha: 1.0))
+        addHologram(to: scene, position: SCNVector3(-4.0, 0,  4.0), color: UIColor(red: 0.55, green: 0.30, blue: 0.95, alpha: 1.0))
+        addHologram(to: scene, position: SCNVector3( 4.0, 0,  4.0), color: UIColor(red: 0.30, green: 0.85, blue: 1.0, alpha: 1.0))
+        // Центральная неон-инсталляция (вертикальная капсула)
+        addNeonPillar(to: scene)
+    }
+
+    private static func addNeonStrip(to scene: SCNScene, color: UIColor) {
+        let mat = SCNMaterial()
+        mat.diffuse.contents = color
+        mat.emission.contents = color
+        mat.lightingModel = .lambert
+
+        for direction in [-1, 1] {
+            let strip = SCNBox(width: CGFloat(roomSize * 0.9), height: 0.04, length: 0.04, chamferRadius: 0.01)
+            strip.materials = [mat]
+            let north = SCNNode(geometry: strip)
+            north.position = SCNVector3(0, 0.1, Float(direction) * (roomSize / 2 - 0.1))
+            scene.rootNode.addChildNode(north)
+
+            let east = SCNNode(geometry: strip)
+            east.position = SCNVector3(Float(direction) * (roomSize / 2 - 0.1), 0.1, 0)
+            east.eulerAngles.y = .pi / 2
+            scene.rootNode.addChildNode(east)
+        }
+    }
+
+    private static func addHologram(to scene: SCNScene, position: SCNVector3, color: UIColor) {
+        // Тонкий металлический постамент
+        let baseMat = SCNMaterial()
+        baseMat.diffuse.contents = UIColor(red: 0.1, green: 0.1, blue: 0.12, alpha: 1.0)
+        baseMat.metalness.contents = 0.9
+        baseMat.roughness.contents = 0.2
+        baseMat.lightingModel = .physicallyBased
+        let base = SCNCylinder(radius: 0.18, height: 0.6)
+        base.materials = [baseMat]
+        let baseNode = SCNNode(geometry: base)
+        baseNode.position = SCNVector3(position.x, 0.3, position.z)
+        scene.rootNode.addChildNode(baseNode)
+
+        // Голограмма (светящийся икосаэдр-подобный объект)
+        let holoMat = SCNMaterial()
+        holoMat.diffuse.contents = color
+        holoMat.emission.contents = color
+        holoMat.transparency = 0.65
+        holoMat.lightingModel = .lambert
+        let holo = SCNSphere(radius: 0.22)
+        holo.segmentCount = 8
+        holo.materials = [holoMat]
+        let holoNode = SCNNode(geometry: holo)
+        holoNode.position = SCNVector3(position.x, 0.85, position.z)
+        // Медленное вращение
+        let spin = SCNAction.rotateBy(x: 0, y: 2 * .pi, z: 0, duration: 8)
+        holoNode.runAction(SCNAction.repeatForever(spin))
+        scene.rootNode.addChildNode(holoNode)
+    }
+
+    private static func addNeonPillar(to scene: SCNScene) {
+        let pillarMat = SCNMaterial()
+        pillarMat.diffuse.contents = UIColor(red: 0.30, green: 0.85, blue: 1.0, alpha: 1.0)
+        pillarMat.emission.contents = UIColor(red: 0.30, green: 0.85, blue: 1.0, alpha: 1.0)
+        pillarMat.transparency = 0.8
+        pillarMat.lightingModel = .lambert
+
+        let pillar = SCNCapsule(capRadius: 0.06, height: 2.5)
+        pillar.materials = [pillarMat]
+        let node = SCNNode(geometry: pillar)
+        node.position = SCNVector3(0, 1.25, 0)
+        scene.rootNode.addChildNode(node)
     }
 
     private static func addRug(to scene: SCNScene, palette: ShowroomTheme.Palette) {

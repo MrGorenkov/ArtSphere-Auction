@@ -36,7 +36,7 @@ final class ArtworkModel: Model, Content, @unchecked Sendable {
         price: Double? = nil,
         isForSale: Bool = true,
         styleId: UUID? = nil,
-        blockchain: String = "Polygon",
+        blockchain: String = "TON",
         creatorId: UUID? = nil
     ) {
         self.id = id
@@ -55,7 +55,9 @@ final class ArtworkModel: Model, Content, @unchecked Sendable {
 }
 
 extension ArtworkModel {
-    func toDTO() -> ArtworkDTO {
+    /// `tokenIdOnChain` / `contractAddress` / `explorerUrl` нужно прокидывать снаружи через
+    /// JOIN — модель сама их не знает (хранятся в `nft_tokens`). См. `ArtworkController.loadTokenMap`.
+    func toDTO(tokenIdOnChain: String? = nil, contractAddress: String? = nil, explorerUrl: String? = nil) -> ArtworkDTO {
         ArtworkDTO(
             id: self.id?.uuidString ?? "",
             title: self.title,
@@ -68,7 +70,10 @@ extension ArtworkModel {
             styleId: self.$style.id?.uuidString,
             styleName: self.$style.wrappedValue?.name,
             blockchain: self.blockchain,
-            createdAt: self.createdAt?.iso8601String ?? ""
+            createdAt: self.createdAt?.iso8601String ?? "",
+            tokenIdOnChain: tokenIdOnChain,
+            contractAddress: contractAddress,
+            explorerUrl: explorerUrl
         )
     }
 }

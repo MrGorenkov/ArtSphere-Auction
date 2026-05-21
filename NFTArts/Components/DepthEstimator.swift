@@ -28,23 +28,10 @@ final class DepthEstimator {
     }()
 
     private init() {
-        // The CoreML compiler bakes `.mlpackage` resources into `.mlmodelc` bundles
-        // inside the app at build time, so we look up the compiled form by name.
-        guard let url = Bundle.main.url(forResource: "DepthAnythingV2SmallF16INT8", withExtension: "mlmodelc") else {
-            print("[DepthEstimator] model bundle not found — falling back to nil")
-            self.model = nil
-            return
-        }
-        do {
-            let mlConfig = MLModelConfiguration()
-            // .all = let the OS pick CPU / GPU / Neural Engine per layer.
-            mlConfig.computeUnits = .all
-            let ml = try MLModel(contentsOf: url, configuration: mlConfig)
-            self.model = try VNCoreMLModel(for: ml)
-        } catch {
-            print("[DepthEstimator] failed to load model: \(error)")
-            self.model = nil
-        }
+        // НЕ грузим CoreML модель Depth Anything V2: на текущем iOS она крашит ANE
+        // (`Invalid layer: Invalid input tensor height ...`) и компиляция на устройстве
+        // занимает 30+ сек на main thread → watchdog kill. Используем luminance fallback.
+        self.model = nil
     }
 
     /// Generates a single-channel depth map for `image`. The returned UIImage is grayscale,
@@ -54,6 +41,14 @@ final class DepthEstimator {
         if let key = cacheKey, let cached = cache.object(forKey: key as NSString) {
             return cached
         }
+        // CoreML Depth Anything V2 модель крашит ANE-инфер на текущем iOS
+        // (`Invalid layer: Invalid input tensor height 28, must be 1`). Поэтому всегда
+        // используем luminance fallback — он стабильный и даёт приличный depth.
+        return fallbackDepthFromLuminance(image: image, cacheKey: cacheKey)
+    }
+
+    /// Старый CoreML pipeline — оставлен для будущего, когда исправят модель.
+    private func depthMapViaCoreML(for image: UIImage, cacheKey: String?) -> UIImage? {
         guard let model, let cgImage = image.cgImage else { return nil }
 
         let start = CFAbsoluteTimeGetCurrent()
@@ -172,4 +167,30 @@ final class DepthEstimator {
 
     /// Returns true if the model is available — UI can grey out the toggle otherwise.
     var isAvailable: Bool { model != nil }
+
+    // MARK: - Luminance fallback (когда CoreML модель не загрузилась)
+
+    /// Простая depth-карта на основе яркости изображения.
+    /// Bright pixel = closer, dark pixel = farther. Не SOTA, но работает мгновенно
+    /// без CoreML / blur / больших аллокаций — минимальный риск краша.
+    private func fallbackDepthFromLuminance(image: UIImage, cacheKey: String?) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let w = 256, h = 256
+
+        // Простой downsample в grayscale через CGContext. Без blur — DepthMesh сам сглаживает.
+        let cs = CGColorSpaceCreateDeviceGray()
+        guard let ctx = CGContext(
+            data: nil, width: w, height: h, bitsPerComponent: 8,
+            bytesPerRow: w, space: cs, bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        guard let smallCG = ctx.makeImage() else { return nil }
+
+        let result = UIImage(cgImage: smallCG)
+        if let key = cacheKey {
+            cache.setObject(result, forKey: key as NSString)
+        }
+        return result
+    }
 }

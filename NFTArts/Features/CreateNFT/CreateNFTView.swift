@@ -212,17 +212,24 @@ struct CreateNFTView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
-            // Blockchain
+            // Blockchain — фиксированно TON Testnet (единственная поддерживаемая сеть)
             VStack(alignment: .leading, spacing: 6) {
                 Text(L10n.blockchain)
                     .font(NFTTypography.subheadline)
                     .fontWeight(.medium)
-                Picker(L10n.blockchain, selection: $blockchain) {
-                    ForEach(NFTArtwork.BlockchainNetwork.allCases, id: \.self) { net in
-                        Text(net.rawValue).tag(net)
-                    }
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.fill")
+                        .foregroundStyle(.blue)
+                    Text("TON Testnet")
+                        .font(NFTTypography.subheadline)
+                    Spacer()
+                    Text("on-chain")
+                        .font(NFTTypography.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
 
             // Starting Price
